@@ -3,7 +3,7 @@
 #include <cxcore.h>
 #include <highgui.h>
 
-#define WINDOW_NAME "CVWindow"
+#define WINDOW_NAME "Hello Webcam!"
 
 int main(int argc, char* argv[]) {
   
