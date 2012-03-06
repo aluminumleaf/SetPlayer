@@ -1,5 +1,7 @@
 
 from cv import *
+from math import *
+
 import time
 
 DEFAULT_FILE = "../Pictures/lights_on.png"
@@ -59,6 +61,27 @@ Split(hsvImage, hue, sat, val, None)
 
 #storage = CreateMemStorage(0)
 #contours = FindContours(img, storage, 
+
+houghImage = CreateMat(height, width, CV_8UC1)
+houghImageColor = CreateMat(height, width, CV_8UC3)
+storage = CreateMemStorage(0)
+Canny(val, houghImage, 50, 200, 3)
+CvtColor(houghImage, houghImageColor, CV_GRAY2RGB)
+
+lines = HoughLines2(houghImage, storage, CV_HOUGH_STANDARD, 1, CV_PI/180, 100, 0, 0)
+for i in xrange(min(len(lines), 100)):
+    line = lines[i]
+    rho = line[0]
+    theta = line[1]
+    a = cos(theta)
+    b = sin(theta)
+    x0 = a*rho 
+    y0 = b*rho
+    pt1 = (Round(x0 + 1000*(-b)), Round(y0 + 1000*(a)))
+    pt2 = (Round(x0 - 1000*(-b)), Round(y0 - 1000*(a)))
+    Line(houghImageColor, pt1, pt2, CV_RGB(255, 0, 0), 3, 8)
+displayImage('Hough Lines', houghImageColor)
+
 
 while True:
     
