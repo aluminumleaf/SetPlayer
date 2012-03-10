@@ -1,7 +1,7 @@
 
 from cv import *
 from math import *
-
+import random
 import time
 
 DEFAULT_FILE = "../Pictures/lights_on.png"
@@ -65,25 +65,46 @@ Split(hsvImage, hue, sat, val, None)
 houghImage = CreateMat(height, width, CV_8UC1)
 houghImageColor = CreateMat(height, width, CV_8UC3)
 storage = CreateMemStorage(0)
-Canny(val, houghImage, 50, 200, 3)
+Canny(val, houghImage, 230, 250, 3)
 CvtColor(houghImage, houghImageColor, CV_GRAY2RGB)
 
-lines = HoughLines2(houghImage, storage, CV_HOUGH_STANDARD, 1, CV_PI/180, 100, 0, 0)
-for i in xrange(min(len(lines), 100)):
-    line = lines[i]
-    rho = line[0]
-    theta = line[1]
-    a = cos(theta)
-    b = sin(theta)
-    x0 = a*rho 
-    y0 = b*rho
-    pt1 = (Round(x0 + 1000*(-b)), Round(y0 + 1000*(a)))
-    pt2 = (Round(x0 - 1000*(-b)), Round(y0 - 1000*(a)))
-    Line(houghImageColor, pt1, pt2, CV_RGB(255, 0, 0), 3, 8)
+lines = HoughLines2(houghImage, storage, CV_HOUGH_PROBABILISTIC, 1, CV_PI/180, 50, 10, 20)
+
+print "Got", len(lines), "lines"
+for line in lines:
+    Line(houghImageColor, line[0], line[1], CV_RGB(255, 0, 0), 3, 8)
+
+def lineAngle(line):
+    y = line[0][1] - line[1][1]
+    x = line[0][0] - line[1][0]
+    return atan2(y, x)
+
+def angleDiff(a1, a2):
+    a1 = fmod(a1, CV_PI)
+    a2 = fmod(a2, CV_PI)
+    return a2 - a1;
+
+def randomColor():
+    r = random.randint(0, 255)
+    g = random.randint(0, 255)
+    b = random.randint(0, 255)
+    return CV_RGB(r, g, b)
+
+print "Finding cards..."
+for line1 in lines:
+    for line2 in lines:
+        if line1 == line2:
+            continue
+        diff = abs(angleDiff(lineAngle(line1), lineAngle(line2)))
+        if (diff - CV_PI/2) < 0.1:
+            print "    Found match: ", line1, line2
+        color = randomColor()
+        Line(houghImageColor, line1[0], line1[1], color, 3, 8)
+        Line(houghImageColor, line2[0], line2[1], color, 3, 8)
+
 displayImage('Hough Lines', houghImageColor)
 
 
 while True:
-    
     time.sleep(500)
 
