@@ -71,8 +71,8 @@ CvtColor(houghImage, houghImageColor, CV_GRAY2RGB)
 lines = HoughLines2(houghImage, storage, CV_HOUGH_PROBABILISTIC, 1, CV_PI/180, 50, 10, 20)
 
 print "Got", len(lines), "lines"
-for line in lines:
-    Line(houghImageColor, line[0], line[1], CV_RGB(255, 0, 0), 3, 8)
+#for line in lines:
+#    Line(houghImageColor, line[0], line[1], CV_RGB(255, 0, 0), 3, 8)
 
 def lineAngle(line):
     y = line[0][1] - line[1][1]
@@ -90,14 +90,41 @@ def randomColor():
     b = random.randint(0, 255)
     return CV_RGB(r, g, b)
 
+def distance(p1, p2):
+    dx = p1[0] - p2[0]
+    dy = p1[1] - p2[1]
+    return sqrt(dx*dx + dy*dy)
+
+def endpointDistance(line1, line2):
+    return min(distance(line1[0], line2[0]),
+               distance(line1[0], line2[1]),
+               distance(line1[1], line2[0]),
+               distance(line1[1], line2[1]))
+
+def lineVec(line):
+    return ((line[0][0] - line[1][0]), (line[0][1] - line[1][1]))
+
+def vecLen(vec):
+    return distance((0,0),vec)
+
+def dot(v1, v2):
+    x = float(v1[0] * v2[0])
+    y = float(v1[1] * v2[1])
+    return (x + y) / (vecLen(v1) * vecLen(v2))
+
 print "Finding cards..."
 for line1 in lines:
     for line2 in lines:
         if line1 == line2:
             continue
-        diff = abs(angleDiff(lineAngle(line1), lineAngle(line2)))
-        if (diff - CV_PI/2) < 0.1:
-            print "    Found match: ", line1, line2
+        v1 = lineVec(line1)
+        v2 = lineVec(line2)
+        dotProduct = dot(v1, v2)
+        if abs(dotProduct) > 0.2:
+            continue
+        if endpointDistance(line1, line2) > 10:
+            continue
+        print "    Found match: ", line1, line2
         color = randomColor()
         Line(houghImageColor, line1[0], line1[1], color, 3, 8)
         Line(houghImageColor, line2[0], line2[1], color, 3, 8)
