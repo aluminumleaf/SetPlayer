@@ -112,9 +112,13 @@ def dot(v1, v2):
     y = float(v1[1] * v2[1])
     return (x + y) / (vecLen(v1) * vecLen(v2))
 
+matchedLines = []
+
 print "Finding cards..."
-for line1 in lines:
-    for line2 in lines:
+for i in xrange(len(lines)):
+    line1 = lines[i]
+    for j in xrange(i+1, len(lines)):
+        line2 = lines[j]
         if line1 == line2:
             continue
         v1 = lineVec(line1)
@@ -125,9 +129,60 @@ for line1 in lines:
         if endpointDistance(line1, line2) > 10:
             continue
         print "    Found match: ", line1, line2
+        matchedLines += [(line1, line2)]
         color = randomColor()
         Line(houghImageColor, line1[0], line1[1], color, 3, 8)
         Line(houghImageColor, line2[0], line2[1], color, 3, 8)
+        
+def mergeCommonPoint(polyline, line):
+    firstPolyPt = polyline[0]
+    lastPolyPt = polyline[-1]
+    firstLinePt = line[0]
+    lastLinePt = line[-1]
+
+    dist1 = distance(firstPolyPt, firstLinePt)
+    dist2 = distance(firstPolyPt, lastLinePt)
+    dist3 = distance(lastPolyPt, firstLinePt)
+    dist4 = distance(lastPolyPt, lastLinePt)
+    minDist = min(dist1, dist2, dist3, dist4)
+
+    if dist1 == minDist:
+        return [lastLinePt] + polyline
+    elif dist2 == minDist:
+        return [firstLinePt] + polyline
+    elif dist3 == minDist:
+        return polyline + [firstLinePt]
+    else:
+        return polyline + [lastLinePt]
+    
+
+def extractVertices(middle, leg1, leg2):
+    vertices = mergeCommonPoint(list(middle), leg1)
+    vertices = mergeCommonPoint(vertices, leg2)
+    return vertices
+
+
+cardOutlines = []
+for i in xrange(len(matchedLines)):
+    line1, line2 = matchedLines[i]
+    for j in xrange(i+1, len(matchedLines)):
+        other1, other2 = matchedLines[j]
+        if (line1 == other1) and (line2 != other2):
+            cardOutlines += [extractVertices(line1, line2, other2)]
+        if (line2 == other1) and (line1 != other2):
+            cardOutlines += [extractVertices(line2, line1, other2)]
+        if (line1 == other2) and (line2 != other1):
+            cardOutlines += [extractVertices(line1, line2, other1)]
+        if (line2 == other2) and (line1 != other1):
+            cardOutlines += [extractVertices(line2, line1, other1)]
+
+for set in cardOutlines:
+    print set
+
+transform = CreateMat(3, 3, CV_32FC1)
+GetPerspectiveTransform([(0,0), (1,0), (1,1), (0,1)],
+                        [(0,0), (1,0), (1,1), (0,1)],
+                        transform)
 
 displayImage('Hough Lines', houghImageColor)
 
