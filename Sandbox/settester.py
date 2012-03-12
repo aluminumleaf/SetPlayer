@@ -40,7 +40,7 @@ AdaptiveThreshold(
     CV_ADAPTIVE_THRESH_MEAN_C,
     CV_THRESH_BINARY,
     ADAPTIVE_THRESH_BLOCK_SIZE)
-displayImage('step 2', img)
+#displayImage('step 2', img)
 
 hsvImage = CreateMat(height, width, CV_8UC3)
 #hsvImage = CreateImage(imgSize, 8, 3)
@@ -134,6 +134,8 @@ for i in xrange(len(lines)):
         Line(houghImageColor, line1[0], line1[1], color, 3, 8)
         Line(houghImageColor, line2[0], line2[1], color, 3, 8)
         
+displayImage('Hough Lines', houghImageColor)
+
 def mergeCommonPoint(polyline, line):
     firstPolyPt = polyline[0]
     lastPolyPt = polyline[-1]
@@ -179,12 +181,25 @@ for i in xrange(len(matchedLines)):
 for set in cardOutlines:
     print set
 
-transform = CreateMat(3, 3, CV_32FC1)
-GetPerspectiveTransform([(0,0), (1,0), (1,1), (0,1)],
-                        [(0,0), (1,0), (1,1), (0,1)],
-                        transform)
+segmentedImg = CloneMat(origImg)
+for quad in cardOutlines:
+    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 5)
+displayImage("segmented cards?", segmentedImg)
+    
 
-displayImage('Hough Lines', houghImageColor)
+#
+#
+#for i in xrange(len(cardOutlines)):
+#    cardImg = CreateMat(height, width, CV_8UC3)
+#    transform = CreateMat(3, 3, CV_32FC1)
+#
+#    GetPerspectiveTransform(cardOutlines[i],
+#                            [(0,0), (width, 0), (width, height), (0, height)],
+#                            transform)
+#    WarpPerspective(origImg, cardImg, transform) 
+#    windowName = 'card ' +  str(i)
+#    displayImage(windowName, cardImg)
+#
 
 
 while True:
