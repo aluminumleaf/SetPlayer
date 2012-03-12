@@ -239,30 +239,97 @@ cardOutlines = []
 for i in xrange(len(matchedLines)):
     line1, line2 = matchedLines[i]
     for j in xrange(i+1, len(matchedLines)):
+        
         other1, other2 = matchedLines[j]
+
         if (line1 == other1) and (line2 != other2):
-            cardOutlines += [extractVertices(line1, line2, other2)]
-        if (line2 == other1) and (line1 != other2):
-            cardOutlines += [extractVertices(line2, line1, other2)]
-        if (line1 == other2) and (line2 != other1):
-            cardOutlines += [extractVertices(line1, line2, other1)]
-        if (line2 == other2) and (line1 != other1):
-            cardOutlines += [extractVertices(line2, line1, other1)]
+            quad = extractVertices(line1, line2, other2)
+            segments = (line2, line1, other2)
+
+        elif (line2 == other1) and (line1 != other2):
+            quad = extractVertices(line2, line1, other2)
+            segments = (line1, line2, other2)
+
+        elif (line1 == other2) and (line2 != other1):
+            quad = extractVertices(line1, line2, other1)
+            segments = (line2, line1, other1)
+
+        elif (line2 == other2) and (line1 != other1):
+            quad = extractVertices(line2, line1, other1)
+            segments = (line1, line2, other1)
+
+        else:
+            continue
+
+        cardOutlines += [(quad, segments)]
+
+for outline in cardOutlines:
+    print outline
 
 def areParallel(firstLine, secondLine):
     firstVec = lineVec(firstLine)
     secondVec = lineVec(secondLine)
     return abs(dot(firstVec, secondVec)) > 0.95
 
-def quadIsCardOutline(quad):
+def areOverlapping(firstLine, secondLine):
+    ''' Checks whether two line segments overlap.
+
+    Assumption: lines are colinear
+    '''
+    a1, a2 = firstLine
+    b1, b2 = secondLine
+
+    if (a1[0] < b1[0]) and (a1[0] < b2[0]) and (a2[0] < b2[0]) and (a2[0] < b2[0]):
+        return False
+
+    if (a1[0] > b1[0]) and (a1[0] > b2[0]) and (a2[0] > b2[0]) and (a2[0] > b2[0]):
+        return False
+
+    return True
+
+def roughlyEqual(v1, v2, threshold):
+    return abs(v1 - v2) < threshold
+
+def isCardOutline(quad, segments):
+    ''' Check whether the given quad likely outlines a card.
+
+    Assumptions:
+       - the vertices in quad and lines in segments have the same ordering
+    '''
     a, b, c, d = quad
+    leg1, middle, leg2 = segments
     
     # Are lines parallel where they should be?
     if not(areParallel((a,b), (c,d)) and areParallel((b,c), (d,a))):
         return False
     
     # Do line segments fall in reasonable locations?
+    if not(areOverlapping(leg1,   (a,b)) and areOverlapping(middle, (b,c)) and areOverlapping(leg2,   (c,d))):
+        return False
 
+    # Does the aspect ratio make sense?
+    ab = distance(a,b)
+    bc = distance(b,c)
+    cd = distance(c,d)
+    da = distance(d,a)
+
+    ratio1 = ab/bc
+    ratio2 = cd/da
+
+    if (ratio1 < 1):
+        ratio1 = 1/ratio1
+        ratio2 = 1/ratio2
+
+    if not(roughlyEqual(ratio1, ratio2, 0.1)):
+        return False
+    if ratio1 > 2 or ratio2 > 2:
+        return False
+
+    return True
+
+def quadIsCardOutline(q):
+    quad, segments = q
+    return isCardOutline(quad, segments)
 
 cardOutlines = filter(quadIsCardOutline, cardOutlines)
 
@@ -270,23 +337,22 @@ for set in cardOutlines:
     print set
 
 segmentedImg = CloneMat(origImg)
-for quad in cardOutlines: #[0:10]:
+for (quad, segments) in cardOutlines: #[0:10]:
     PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
 displayImage("segmented cards?", segmentedImg)
     
 
 
-#
-#for i in xrange(len(cardOutlines)):
-#    cardImg = CreateMat(height, width, CV_8UC3)
-#    transform = CreateMat(3, 3, CV_32FC1)
-#
-#    GetPerspectiveTransform(cardOutlines[i],
-#                            [(0,0), (width, 0), (width, height), (0, height)],
-#                            transform)
-#    WarpPerspective(origImg, cardImg, transform) 
-#    windowName = 'card ' +  str(i)
-#    displayImage(windowName, cardImg)
+for i in xrange(len(cardOutlines)):
+    cardImg = CreateMat(height, width, CV_8UC3)
+    transform = CreateMat(3, 3, CV_32FC1)
+
+    GetPerspectiveTransform(cardOutlines[i][0],
+                            [(0,0), (width, 0), (width, height), (0, height)],
+                            transform)
+    WarpPerspective(origImg, cardImg, transform) 
+    windowName = 'card ' +  str(i)
+    displayImage(windowName, cardImg)
 
 
 
