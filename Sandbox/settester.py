@@ -4,7 +4,7 @@ from math import *
 import random
 import time
 
-DEFAULT_FILE = "../Pictures/lights_on.png"
+DEFAULT_FILE = "../Pictures/black_bg.png"
 WHITE = 255
 ADAPTIVE_THRESH_BLOCK_SIZE = 51
 
@@ -12,7 +12,7 @@ def displayImage(name, image):
     ''' Makes a window that displays the given image '''
     width, height = GetSize(image)
     #ratio = float(height)/float(width)
-    scale = 0.5
+    scale = 1.0
     newHeight = int(height*scale)
     newWidth = int(width*scale)
     scaledImg = CreateMat(newHeight, newWidth, image.type)
@@ -30,7 +30,6 @@ displayImage('original', origImg)
 imgSize = GetSize(origImg)
 width, height = imgSize
 img = CreateMat(height, width, CV_8UC1)
-#img = CreateImage(imgSize, 8, 1)
 CvtColor(origImg, img, CV_RGB2GRAY)
 #displayImage('step 1', img)
 
@@ -49,9 +48,6 @@ CvtColor(origImg, hsvImage, CV_RGB2HSV)
 hue = CreateMat(height, width, CV_8UC1)
 sat = CreateMat(height, width, CV_8UC1)
 val = CreateMat(height, width, CV_8UC1)
-#hue = CreateImage(imgSize, 8, 1)
-#sat = CreateImage(imgSize, 8, 1)
-#val = CreateImage(imgSize, 8, 1)
 
 Split(hsvImage, hue, sat, val, None)
 
@@ -71,8 +67,8 @@ CvtColor(houghImage, houghImageColor, CV_GRAY2RGB)
 lines = HoughLines2(houghImage, storage, CV_HOUGH_PROBABILISTIC, 1, CV_PI/180, 50, 10, 20)
 
 print "Got", len(lines), "lines"
-#for line in lines:
-#    Line(houghImageColor, line[0], line[1], CV_RGB(255, 0, 0), 3, 8)
+for line in lines:
+    Line(houghImageColor, line[0], line[1], CV_RGB(255, 0, 0), 3, 8)
 
 def lineAngle(line):
     y = line[0][1] - line[1][1]
@@ -112,24 +108,31 @@ def dot(v1, v2):
     y = float(v1[1] * v2[1])
     return (x + y) / (vecLen(v1) * vecLen(v2))
 
-matchedLines = []
-
 print "Finding cards..."
+
+# Match orthogonal lines
+matchedLines = []
 for i in xrange(len(lines)):
     line1 = lines[i]
+
     for j in xrange(i+1, len(lines)):
         line2 = lines[j]
+    
         if line1 == line2:
             continue
+
         v1 = lineVec(line1)
         v2 = lineVec(line2)
         dotProduct = dot(v1, v2)
-        if abs(dotProduct) > 0.2:
+        
+        if abs(dotProduct) > 0.1:
             continue
-        if endpointDistance(line1, line2) > 10:
-            continue
+#        if endpointDistance(line1, line2) > 10:
+#            continue
+        
         print "    Found match: ", line1, line2
         matchedLines += [(line1, line2)]
+        
         color = randomColor()
         Line(houghImageColor, line1[0], line1[1], color, 3, 8)
         Line(houghImageColor, line2[0], line2[1], color, 3, 8)
@@ -153,16 +156,84 @@ def mergeCommonPoint(polyline, line):
     elif dist2 == minDist:
         return [firstLinePt] + polyline
     elif dist3 == minDist:
-        return polyline + [firstLinePt]
-    else:
         return polyline + [lastLinePt]
+    else:
+        return polyline + [firstLinePt]
+    
+def intersect(firstLine, secondLine):
+    ''' finds the intersections of two line segments '''
+    # We'll use parametrization here.
+    # The math (since I should show my work):
+    # 
+    # Let the lines be
+    #       first line  = V*s + P
+    #       second line = U*t + Q
+    # where any captial letter A is some vector A = <ax, ay>
+    #
+    # The intersection is where they're equal:
+    #       V*s + P = U*t + Q
+    # which is equivalent to
+    #       vx*s + px = ux*t + qx   (1)
+    #       vy*s + py = uy*t + qy   (2)
+    # 
+    # Solving for s with equation (1) yields
+    #
+    #       s = (ux/vx)*t + (qx - px)/vx
+    #
+    # and plugging that into equation (2) to solve for t yields
+    #
+    #            vx(qy - py) - vy(qx - px)
+    #       t = ---------------------------
+    #                 vy*ux  -  vx*uy
+    #
+    # Plugging t back into the second line's parametric equation
+    # yields our desired point :)
+
+    V = lineVec(firstLine)
+    U = lineVec(secondLine)
+
+    vLen = vecLen(V)
+    uLen = vecLen(U)
+
+    vx = V[0] / vLen
+    vy = V[1] / vLen
+    ux = U[0] / uLen
+    uy = U[1] / uLen
+
+    px = firstLine[0][0]
+    py = firstLine[0][1]
+    qx = secondLine[0][0]
+    qy = secondLine[0][1]
+
+    denominator = (vy*ux  -  vx*uy)
+    if denominator == 0:
+        print "OH NO! NOT DIVIDING BY ZERO!"
+        return (0, 0)
+    numerator = (vx*(qy - py) - vy*(qx - px))
+    t = numerator / denominator
+
+    xCoord = int(ux * t + qx)
+    yCoord = int(uy * t + qy)
+    return (xCoord, yCoord)
+
     
 
 def extractVertices(middle, leg1, leg2):
-    vertices = mergeCommonPoint(list(middle), leg1)
-    vertices = mergeCommonPoint(vertices, leg2)
-    return vertices
+    firstIntersect = intersect(middle, leg1)
+    secondIntersect = intersect(middle, leg2)
+    
+    if distance(leg1[0], firstIntersect) < distance(leg1[1], firstIntersect):
+        vertices = [leg1[1], firstIntersect, secondIntersect]
+    else:
+        vertices = [leg1[0], firstIntersect, secondIntersect]
 
+    if distance(leg2[0], secondIntersect) < distance(leg2[1], secondIntersect):
+        vertices += [leg2[1]]
+    else:
+        vertices += [leg2[0]]
+#    vertices = mergeCommonPoint(list(middle), leg1)
+#    vertices = mergeCommonPoint(vertices, leg2)
+    return vertices
 
 cardOutlines = []
 for i in xrange(len(matchedLines)):
@@ -178,16 +249,33 @@ for i in xrange(len(matchedLines)):
         if (line2 == other2) and (line1 != other1):
             cardOutlines += [extractVertices(line2, line1, other1)]
 
+def areParallel(firstLine, secondLine):
+    firstVec = lineVec(firstLine)
+    secondVec = lineVec(secondLine)
+    return abs(dot(firstVec, secondVec)) > 0.95
+
+def quadIsCardOutline(quad):
+    a, b, c, d = quad
+    
+    # Are lines parallel where they should be?
+    if not(areParallel((a,b), (c,d)) and areParallel((b,c), (d,a))):
+        return False
+    
+    # Do line segments fall in reasonable locations?
+
+
+cardOutlines = filter(quadIsCardOutline, cardOutlines)
+
 for set in cardOutlines:
     print set
 
 segmentedImg = CloneMat(origImg)
-for quad in cardOutlines:
-    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 5)
+for quad in cardOutlines: #[0:10]:
+    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
 displayImage("segmented cards?", segmentedImg)
     
 
-#
+
 #
 #for i in xrange(len(cardOutlines)):
 #    cardImg = CreateMat(height, width, CV_8UC3)
@@ -199,7 +287,7 @@ displayImage("segmented cards?", segmentedImg)
 #    WarpPerspective(origImg, cardImg, transform) 
 #    windowName = 'card ' +  str(i)
 #    displayImage(windowName, cardImg)
-#
+
 
 
 while True:
