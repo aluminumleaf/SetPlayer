@@ -104,9 +104,11 @@ def vecLen(vec):
     return distance((0,0),vec)
 
 def dot(v1, v2):
+    ''' Precondition: vectors have nonzero length '''
     x = float(v1[0] * v2[0])
     y = float(v1[1] * v2[1])
-    return (x + y) / (vecLen(v1) * vecLen(v2))
+    magnitude = vecLen(v1) * vecLen(v2)
+    return (x + y) / magnitude
 
 print "Finding cards..."
 
@@ -123,6 +125,7 @@ for i in xrange(len(lines)):
 
         v1 = lineVec(line1)
         v2 = lineVec(line2)
+
         dotProduct = dot(v1, v2)
         
         if abs(dotProduct) > 0.1:
@@ -263,10 +266,8 @@ for i in xrange(len(matchedLines)):
 
         cardOutlines += [(quad, segments)]
 
-for outline in cardOutlines:
-    print outline
-
 def areParallel(firstLine, secondLine):
+    ''' Precondition: firstLine and secondLine have nonzero length '''
     firstVec = lineVec(firstLine)
     secondVec = lineVec(secondLine)
     return abs(dot(firstVec, secondVec)) > 0.95
@@ -296,8 +297,12 @@ def isCardOutline(quad, segments):
     Assumptions:
        - the vertices in quad and lines in segments have the same ordering
     '''
+
     a, b, c, d = quad
     leg1, middle, leg2 = segments
+
+    if a == b or b == c or c ==d or d == a:
+        return False
     
     # Are lines parallel where they should be?
     if not(areParallel((a,b), (c,d)) and areParallel((b,c), (d,a))):
@@ -332,9 +337,6 @@ def quadIsCardOutline(q):
     return isCardOutline(quad, segments)
 
 cardOutlines = filter(quadIsCardOutline, cardOutlines)
-
-for set in cardOutlines:
-    print set
 
 segmentedImg = CloneMat(origImg)
 for (quad, segments) in cardOutlines: #[0:10]:
