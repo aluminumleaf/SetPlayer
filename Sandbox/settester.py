@@ -332,6 +332,12 @@ def isCardOutline(quad, segments):
 
     return True
 
+def orientCard(quad):
+    a, b, c, d = quad
+    if distance(a,b) > distance(b,c):
+        return [b, c, d, a]
+    return quad
+
 def quadIsCardOutline(q):
     quad, segments = q
     return isCardOutline(quad, segments)
@@ -349,7 +355,8 @@ for i in xrange(len(cardOutlines)):
     cardImg = CreateMat(height, width, CV_8UC3)
     transform = CreateMat(3, 3, CV_32FC1)
 
-    GetPerspectiveTransform(cardOutlines[i][0],
+    quad = orientCard(cardOutlines[i][0])
+    GetPerspectiveTransform(quad,
                             [(0,0), (width, 0), (width, height), (0, height)],
                             transform)
     WarpPerspective(origImg, cardImg, transform) 
