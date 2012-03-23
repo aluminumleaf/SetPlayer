@@ -62,7 +62,7 @@ houghImage = CreateMat(height, width, CV_8UC1)
 houghImageColor = CreateMat(height, width, CV_8UC3)
 storage = CreateMemStorage(0)
 Canny(val, houghImage, 230, 250, 3)
-CvtColor(houghImage, houghImageColor, CV_GRAY2RGB)
+
 
 lines = HoughLines2(houghImage, storage, CV_HOUGH_PROBABILISTIC, 1, CV_PI/180, 50, 10, 20)
 
@@ -348,21 +348,49 @@ segmentedImg = CloneMat(origImg)
 for (quad, segments) in cardOutlines: #[0:10]:
     PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
 displayImage("segmented cards?", segmentedImg)
-    
 
+def colorOfCard(cardImg, threshCardImg):
+    redSum = greenSum = blueSum = 0
+    width, height = GetSize(cardImg)
+    for row in xrange(height):
+        for col in xrange(width):
+            redSum   += cardImg[row,col][2] * threshCardImg[row,col]
+            greenSum += cardImg[row,col][1] * threshCardImg[row,col]
+            blueSum  += cardImg[row,col][0] * threshCardImg[row,col]
+    if greenSum > redSum:
+        return "green"
+    if redSum > greenSum and blueSum > greenSum:
+        return "purple"
+    return "red"
 
+cardImgWidth = 100
+cardImgHeight = 150
 for i in xrange(len(cardOutlines)):
-    cardImg = CreateMat(height, width, CV_8UC3)
+    cardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC3)
     transform = CreateMat(3, 3, CV_32FC1)
 
     quad = orientCard(cardOutlines[i][0])
     GetPerspectiveTransform(quad,
-                            [(0,0), (width, 0), (width, height), (0, height)],
+                            [(0,0), 
+                             (cardImgWidth, 0), 
+                             (cardImgWidth, cardImgHeight), 
+                             (0, cardImgHeight)],
                             transform)
     WarpPerspective(origImg, cardImg, transform) 
-    windowName = 'card ' +  str(i)
-    displayImage(windowName, cardImg)
+    grayCardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC1)
+    CvtColor(cardImg, grayCardImg, CV_RGB2GRAY)
 
+    AdaptiveThreshold(
+        grayCardImg, grayCardImg,
+        WHITE,
+        CV_ADAPTIVE_THRESH_MEAN_C,
+        CV_THRESH_BINARY_INV,
+        ADAPTIVE_THRESH_BLOCK_SIZE)
+
+    windowName = 'card ' +  str(i)
+    displayImage(windowName, grayCardImg)
+
+    print str(i), " is ", colorOfCard(cardImg, grayCardImg)
 
 
 while True:
