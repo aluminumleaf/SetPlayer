@@ -378,7 +378,11 @@ def templateImage(count, texture, shape):
     if not os.path.exists(file):
         print "Warning: file not found (",file,")"
         return ()
-    return LoadImageM(file)
+    img = LoadImageM(file)
+    width, height = GetSize(img)
+    result = CreateMat(height, width, CV_8UC1)
+    CvtColor(img, result, CV_RGB2GRAY)
+    return result
 
 templates = [(count, texture, shape, templateImage(count, texture, shape)) 
              for count in counts
@@ -386,9 +390,15 @@ templates = [(count, texture, shape, templateImage(count, texture, shape))
              for shape in shapes]
 templates = filter(lambda x: x[3] != (), templates)
 
+def compareImages(img1, img2):
+    width, height = GetSize(img1)
+    diff = CreateMat(height, width, CV_8UC1)
+    AbsDiff(img1, img2, diff)
+    return Sum(diff)
+
 def match(templates, card):
     '''returns the template that best matches the card'''
-    return 0
+    return sorted(templates, key=lambda c: compareImages(c[3],card))[0]
 
 cardImgWidth = 100
 cardImgHeight = 150
@@ -417,7 +427,8 @@ for i in xrange(len(cardOutlines)):
     windowName = 'card ' +  str(i)
     displayImage(windowName, grayCardImg)
 
-    print str(i), " is ", colorOfCard(cardImg, grayCardImg)
+    print i, " is ", colorOfCard(cardImg, grayCardImg)
+    print "best template for", i, "is", match(templates, grayCardImg)
 
 
 while True:
