@@ -366,7 +366,7 @@ def colorOfCard(cardImg, threshCardImg):
 
 colors   = ["red", "green", "purple"]
 shapes   = ["diamonds", "ovals", "squiggles"]
-textures = ["open", "filled", "shaded"]
+textures = ["open", "filled", "striped"]
 counts   = ["one", "two", "three"]
 
 def templateImageFilename(count, texture, shape):
@@ -384,7 +384,10 @@ def templateImage(count, texture, shape):
     CvtColor(img, result, CV_RGB2GRAY)
     return result
 
-templates = [(count, texture, shape, templateImage(count, texture, shape)) 
+def wordToInt(word):
+    return counts.index(word) + 1
+
+templates = [(wordToInt(count), texture, shape, templateImage(count, texture, shape)) 
              for count in counts
              for texture in textures 
              for shape in shapes]
@@ -402,6 +405,16 @@ def bestMatch(templates, card):
 
 cardImgWidth = 100
 cardImgHeight = 150
+
+def cardShadeLevelIndex(cardImage, shapeCount):
+    ''' Determines how shaded a card is (open, striped, or filled) 
+    
+    Assumes:
+     - cardImage is a black and white image of the card
+     - shapeCount is not 0
+    '''
+    return Sum(cardImage)[0] / (shapeCount * 255)
+
 
 for i in xrange(len(cardOutlines)):
     cardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC3)
@@ -432,7 +445,7 @@ for i in xrange(len(cardOutlines)):
 
     color = colorOfCard(cardImg, grayCardImg)
     count, texture, shape, _ = bestMatch(templates, grayCardImg)
-    print i, " is ", count, color, texture, shape
+    print i, " is ", count, color, texture, shape, " with total # pixels/shape = ", cardShadeLevelIndex(grayCardImg, count)
 
 
 while True:
