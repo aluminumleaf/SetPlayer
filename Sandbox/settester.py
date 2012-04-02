@@ -3,6 +3,7 @@ from cv import *
 from math import *
 import random
 import time
+import os
 
 DEFAULT_FILE = "../Pictures/black_bg.png"
 WHITE = 255
@@ -359,9 +360,35 @@ def colorOfCard(cardImg, threshCardImg):
             blueSum  += cardImg[row,col][0] * threshCardImg[row,col]
     if greenSum > redSum:
         return "green"
-    if redSum > greenSum and blueSum > greenSum:
+    if redSum > greenSum and blueSum > greenSum * 0.9:
         return "purple"
     return "red"
+
+colors   = ["red", "green", "purple"]
+shapes   = ["diamonds", "ovals", "squiggles"]
+textures = ["open", "filled", "shaded"]
+counts   = ["one", "two", "three"]
+
+def templateImageFilename(count, texture, shape):
+    return ("../Pictures/Training/" + 
+            count + "_" + texture + "_" + shape + ".png")
+
+def templateImage(count, texture, shape):
+    file = templateImageFilename(count, texture, shape)
+    if not os.path.exists(file):
+        print "Warning: file not found (",file,")"
+        return ()
+    return LoadImageM(file)
+
+templates = [(count, texture, shape, templateImage(count, texture, shape)) 
+             for count in counts
+             for texture in textures 
+             for shape in shapes]
+templates = filter(lambda x: x[3] != (), templates)
+
+def match(templates, card):
+    '''returns the template that best matches the card'''
+    return 0
 
 cardImgWidth = 100
 cardImgHeight = 150
