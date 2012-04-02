@@ -365,6 +365,10 @@ def colorOfCard(cardImg, threshCardImg):
 
 cardImgWidth = 100
 cardImgHeight = 150
+
+pictureName = raw_input('Name of picture is...?\n')
+
+
 for i in xrange(len(cardOutlines)):
     cardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC3)
     transform = CreateMat(3, 3, CV_32FC1)
@@ -389,6 +393,8 @@ for i in xrange(len(cardOutlines)):
 
     windowName = 'card ' +  str(i)
     displayImage(windowName, grayCardImg)
+
+#    SaveImage("../Pictures/Training/" + pictureName + str(i) + ".png", grayCardImg)
 
     print str(i), " is ", colorOfCard(cardImg, grayCardImg)
 
