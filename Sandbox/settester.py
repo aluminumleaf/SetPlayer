@@ -360,7 +360,7 @@ def colorOfCard(cardImg, threshCardImg):
             blueSum  += cardImg[row,col][0] * threshCardImg[row,col]
     if greenSum > redSum:
         return "green"
-    if redSum > greenSum and blueSum > greenSum * 0.9:
+    if redSum > greenSum and blueSum > redSum * 0.75:
         return "purple"
     return "red"
 
@@ -396,7 +396,7 @@ def compareImages(img1, img2):
     AbsDiff(img1, img2, diff)
     return Sum(diff)
 
-def match(templates, card):
+def bestMatch(templates, card):
     '''returns the template that best matches the card'''
     return sorted(templates, key=lambda c: compareImages(c[3],card))[0]
 
@@ -427,8 +427,9 @@ for i in xrange(len(cardOutlines)):
     windowName = 'card ' +  str(i)
     displayImage(windowName, grayCardImg)
 
-    print i, " is ", colorOfCard(cardImg, grayCardImg)
-    print "best template for", i, "is", match(templates, grayCardImg)
+    color = colorOfCard(cardImg, grayCardImg)
+    count, texture, shape, _ = bestMatch(templates, grayCardImg)
+    print i, " is ", count, color, texture, shape
 
 
 while True:
