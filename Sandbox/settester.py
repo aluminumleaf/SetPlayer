@@ -3,6 +3,7 @@ from cv import *
 from math import *
 import random
 import time
+import os
 
 DEFAULT_FILE = "../Pictures/black_bg.png"
 WHITE = 255
@@ -359,9 +360,45 @@ def colorOfCard(cardImg, threshCardImg):
             blueSum  += cardImg[row,col][0] * threshCardImg[row,col]
     if greenSum > redSum:
         return "green"
-    if redSum > greenSum and blueSum > greenSum:
+    if redSum > greenSum and blueSum > redSum * 0.75:
         return "purple"
     return "red"
+
+colors   = ["red", "green", "purple"]
+shapes   = ["diamonds", "ovals", "squiggles"]
+textures = ["open", "filled", "shaded"]
+counts   = ["one", "two", "three"]
+
+def templateImageFilename(count, texture, shape):
+    return ("../Pictures/Training/" + 
+            count + "_" + texture + "_" + shape + ".png")
+
+def templateImage(count, texture, shape):
+    file = templateImageFilename(count, texture, shape)
+    if not os.path.exists(file):
+        print "Warning: file not found (",file,")"
+        return ()
+    img = LoadImageM(file)
+    width, height = GetSize(img)
+    result = CreateMat(height, width, CV_8UC1)
+    CvtColor(img, result, CV_RGB2GRAY)
+    return result
+
+templates = [(count, texture, shape, templateImage(count, texture, shape)) 
+             for count in counts
+             for texture in textures 
+             for shape in shapes]
+templates = filter(lambda x: x[3] != (), templates)
+
+def compareImages(img1, img2):
+    width, height = GetSize(img1)
+    diff = CreateMat(height, width, CV_8UC1)
+    AbsDiff(img1, img2, diff)
+    return Sum(diff)
+
+def bestMatch(templates, card):
+    '''returns the template that best matches the card'''
+    return sorted(templates, key=lambda c: compareImages(c[3],card))[0]
 
 cardImgWidth = 100
 cardImgHeight = 150
@@ -396,7 +433,9 @@ for i in xrange(len(cardOutlines)):
 
 #    SaveImage("../Pictures/Training/" + pictureName + str(i) + ".png", grayCardImg)
 
-    print str(i), " is ", colorOfCard(cardImg, grayCardImg)
+    color = colorOfCard(cardImg, grayCardImg)
+    count, texture, shape, _ = bestMatch(templates, grayCardImg)
+    print i, " is ", count, color, texture, shape
 
 
 while True:
