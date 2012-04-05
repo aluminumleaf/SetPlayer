@@ -67,7 +67,7 @@ Canny(val, houghImage, 230, 250, 3)
 
 lines = HoughLines2(houghImage, storage, CV_HOUGH_PROBABILISTIC, 1, CV_PI/180, 50, 10, 20)
 
-print "Got", len(lines), "lines"
+#print "Got", len(lines), "lines"
 for line in lines:
     Line(houghImageColor, line[0], line[1], CV_RGB(255, 0, 0), 3, 8)
 
@@ -111,7 +111,7 @@ def dot(v1, v2):
     magnitude = vecLen(v1) * vecLen(v2)
     return (x + y) / magnitude
 
-print "Finding cards..."
+#print "Finding cards..."
 
 # Match orthogonal lines
 matchedLines = []
@@ -134,7 +134,7 @@ for i in xrange(len(lines)):
 #        if endpointDistance(line1, line2) > 10:
 #            continue
         
-        print "    Found match: ", line1, line2
+#        print "    Found match: ", line1, line2
         matchedLines += [(line1, line2)]
         
         color = randomColor()
@@ -393,6 +393,16 @@ templates = [(wordToInt(count), texture, shape, templateImage(count, texture, sh
              for shape in shapes]
 templates = filter(lambda x: x[3] != (), templates)
 
+newTemplates = []
+for t in templates:
+    if t[2] == "squiggles":
+        img = t[3]
+        width, height = GetSize(img)
+        newImg = CreateMat(height, width, CV_8UC1)
+        Flip(img, newImg, 1) # horizontal flip
+        newTemplates += [(t[0], t[1], t[2], newImg)]
+templates += newTemplates
+
 def compareImages(img1, img2):
     width, height = GetSize(img1)
     diff = CreateMat(height, width, CV_8UC1)
@@ -415,19 +425,27 @@ def cardShadeLevelIndex(cardImage, shapeCount):
     '''
     return Sum(cardImage)[0] / (shapeCount * 255)
 
+width, height = GetSize(templates[0][3])
+maskImg = CreateMat(height, width, CV_8UC1)
+Set(maskImg, 255)
+border = 15
+Rectangle(maskImg, (border, border), (width-border, height-border), 0, CV_FILLED)
+displayImage("mask", maskImg)
 
-for i in xrange(len(cardOutlines)):
+def getCardImage(outline):
+    global origImg, cardImgHeight, cardImgWidth
+
     cardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC3)
     transform = CreateMat(3, 3, CV_32FC1)
 
-    quad = orientCard(cardOutlines[i][0])
+    quad = orientCard(outline[0])
     GetPerspectiveTransform(quad,
-                            [(0,0), 
-                             (cardImgWidth, 0), 
-                             (cardImgWidth, cardImgHeight), 
+                            [(0,0),
+                             (cardImgWidth, 0),
+                             (cardImgWidth, cardImgHeight),
                              (0, cardImgHeight)],
                             transform)
-    WarpPerspective(origImg, cardImg, transform) 
+    WarpPerspective(origImg, cardImg, transform)
     grayCardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC1)
     CvtColor(cardImg, grayCardImg, CV_RGB2GRAY)
 
@@ -437,6 +455,28 @@ for i in xrange(len(cardOutlines)):
         CV_ADAPTIVE_THRESH_MEAN_C,
         CV_THRESH_BINARY_INV,
         ADAPTIVE_THRESH_BLOCK_SIZE)
+    return (cardImg, grayCardImg)
+
+cardImages = map(getCardImage, cardOutlines)
+
+def applyMask(img, mask):
+    w, h = GetSize(img)
+    dst = CreateMat(h, w, CV_8UC1)
+    And(img, mask, dst)
+    return dst
+
+PERMISSIBLE_BORDER_NOISE = 1000
+
+for i in xrange(len(cardImages)):
+
+    cardImg, grayCardImg = cardImages[i]
+
+    maskedImg = applyMask(grayCardImg, maskImg)
+
+    maskSum = Sum(maskedImg)[0] / 255
+
+    if maskSum >= PERMISSIBLE_BORDER_NOISE:
+        continue
 
     windowName = 'card ' +  str(i)
     displayImage(windowName, grayCardImg)
@@ -446,7 +486,7 @@ for i in xrange(len(cardOutlines)):
     color = colorOfCard(cardImg, grayCardImg)
     count, texture, shape, _ = bestMatch(templates, grayCardImg)
     print i, " is ", count, color, texture, shape, " with total # pixels/shape = ", cardShadeLevelIndex(grayCardImg, count)
-
+    
 
 while True:
     time.sleep(500)
