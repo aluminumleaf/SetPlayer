@@ -105,6 +105,70 @@ for i in xrange(len(lines)):
         color = randomColor()
         Line(houghImageColor, line1[0], line1[1], color, 3, 8)
         Line(houghImageColor, line2[0], line2[1], color, 3, 8)
+        
+        
+
+def areSameOutline(firstOutline, secondOutline, imageWidth, imageHeight):
+    ''' indicates whether two outlines are more or less the same '''
+
+    # Constants (TODO: refactor out later)
+    PERMISSIBLE_OVERLAP_FACTOR = 0.9
+    MAX_SAME_OUTINES_AREA_DIFF = 0.9
+    
+    # Create Images to draw polygons for each outline on
+    firstPoly = CreateMat(imageHeight, imageWidth, CV_8UC1)
+    secondPoly = CreateMat(imageHeight, imageWidth, CV_8UC1)
+    bothPolys = CreateMat(imageHeight, imageWidth, CV_8UC1)
+
+    # Black all the images out
+    Set(firstPoly, 0)
+    Set(secondPoly, 0)
+    Set(bothPolys, 0)
+
+    # Draw the polygons on
+    FillPoly(firstPoly, [firstOutline], 255) # TODO: make 255 a constant.
+    FillPoly(secondPoly, [secondOutline], 255) # TODO: 0 too :P.
+    FillPoly(bothPolys, [firstOutline], 255) 
+    FillPoly(bothPolys, [secondOutline], 255) 
+    
+    # Calculate how many pixels they take up
+    firstArea = Sum(firstPoly)[0]
+    secondArea = Sum(secondPoly)[0]
+    expectedTotalArea = firstArea + secondArea
+    actualTotalArea = Sum(bothPolys)[0]
+
+    if secondArea == 0:
+        return False
+    areaRatio = firstArea / secondArea
+    if areaRatio > 1:
+        areaRatio = 1.0 / areaRatio
+    if areaRatio < MAX_SAME_OUTINES_AREA_DIFF:
+        return False
+
+#    # For debugging purposes...
+#    if actualTotalArea < PERMISSIBLE_OVERLAP_FACTOR * expectedTotalArea:
+#        
+#        displayImage("first polygons", firstPoly)
+#        displayImage("second polygons", secondPoly)
+#        displayImage("both polygons", bothPolys)
+#        
+#        print "first polygon:  ", firstArea
+#        print "second polygon: ", secondArea
+#        print "both polygons:  ", actualTotalArea
+#        print "expected area:  ", expectedTotalArea
+#        print "threshold is:   ", expectedTotalArea * PERMISSIBLE_OVERLAP_FACTOR
+#
+#        print "same card? -> ",  actualTotalArea < PERMISSIBLE_OVERLAP_FACTOR * expectedTotalArea
+#
+#        raw_input(" ... hit ENTER to continue... ")
+#
+#        DestroyWindow("first polygons")
+#        DestroyWindow("second polygons")
+#        DestroyWindow("both polygons")
+#
+    # Decide whether or not they are the same
+    return actualTotalArea < PERMISSIBLE_OVERLAP_FACTOR * expectedTotalArea
+
 
 cardOutlines = []
 for i in xrange(len(matchedLines)):
@@ -283,7 +347,7 @@ def getCardImage(outline):
     cardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC3)
     transform = CreateMat(3, 3, CV_32FC1)
 
-    quad = orientCard(outline[0])
+    quad = orientCard(outline)
     GetPerspectiveTransform(quad,
                             [(0,0),
                              (cardImgWidth, 0),
@@ -302,15 +366,46 @@ def getCardImage(outline):
         ADAPTIVE_THRESH_BLOCK_SIZE)
     return (cardImg, grayCardImg)
 
-cardImages = map(getCardImage, cardOutlines)
+
+def removeDuplicateCards(outlines, imageWidth, imageHeight):
+    ''' Spits out a cleaned up list of outlines without rough duplicates '''
+    prunedOutlines = []
+    numOutlines = len(outlines)
+
+    for i in range(numOutlines):
+        isDuplicate = False
+        
+        for j in range(i+1, numOutlines):
+            if areSameOutline(outlines[i], outlines[j], 
+                              imageWidth, imageHeight):
+                isDuplicate = True
+                break
+        if not isDuplicate:
+            prunedOutlines.append(outlines[i])
+
+    return prunedOutlines
+
+# Might use later in refactoring...
+# ------------------------------------
+#BORDER_MASK = maskImg
+#def hasCardlikeBorder(candidateImg):
+#    ''' Determines whether a given "card"s border is all white '''
+#    PERMISSIBLE_BORDER_NOISE = 1000
+#    maskedImg = applyMask(candidateImg, BORDER_MASK)
+#    borderNoise = Sum(maskedImg)[0] / 255
+#    return borderNoise <= PERMISSIBLE_BORDER_NOISE
+
+imgWidth, imgHeight = GetSize(origImg)
+justOutlines = map(lambda x: x[0], cardOutlines)
+justOutlines = removeDuplicateCards(justOutlines, imgWidth, imgHeight)
+
+cardImages = map(getCardImage, justOutlines)
 
 def applyMask(img, mask):
     w, h = GetSize(img)
     dst = CreateMat(h, w, CV_8UC1)
     And(img, mask, dst)
     return dst
-
-PERMISSIBLE_BORDER_NOISE = 1000
 
 for i in xrange(len(cardImages)):
 
@@ -320,6 +415,7 @@ for i in xrange(len(cardImages)):
 
     maskSum = Sum(maskedImg)[0] / 255
 
+    PERMISSIBLE_BORDER_NOISE = 1000
     if maskSum >= PERMISSIBLE_BORDER_NOISE:
         continue
 
