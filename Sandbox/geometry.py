@@ -1,4 +1,3 @@
-
 from math import *
 
 def lineAngle(line):
@@ -7,8 +6,8 @@ def lineAngle(line):
     return atan2(y, x)
 
 def angleDiff(a1, a2):
-    a1 = fmod(a1, CV_PI)
-    a2 = fmod(a2, CV_PI)
+    a1 = fmod(a1, pi) #CV_PI)
+    a2 = fmod(a2, pi) #CV_PI)
     return a2 - a1;
 
 def distance(p1, p2):
@@ -135,11 +134,44 @@ def extractVertices(middle, leg1, leg2):
 #    vertices = mergeCommonPoint(vertices, leg2)
     return vertices
 
-def areParallel(firstLine, secondLine):
+def areParallelish(firstLine, secondLine, threshold):
     ''' Precondition: firstLine and secondLine have nonzero length '''
     firstVec = lineVec(firstLine)
     secondVec = lineVec(secondLine)
     return abs(dot(firstVec, secondVec)) > 0.95
+
+def areColinearish(firstLine, secondLine):
+    parallelishThreshold = 1.0 # TODO: Magic number danger!
+
+    f1, f2 = firstLine
+    s1, s2 = secondLine
+
+    # Get a line from a firstLine endpoint to a secondLine endpoint.
+    if distance(f1, s1) > distance(f1, s2):
+        l1 = (f1, s1)
+    else:
+        l1 = (f1, s2)
+
+    # If this line isn't parallelish to the original lines, they're not
+    # colinearish.
+    if not areParallelish(firstLine, l1, parallelishThreshold) or \
+       not areParallelish(secondLine, l1, parallelishThreshold):
+       return False
+
+    # Get a line from the other firstLine enpdoint to a secondLine endpoint.
+    if distance(f2, s1) > distance(f2, s2):
+        l2 = (f2, s1)
+    else:
+        l2 = (f2, s2)
+
+    # Again, if it isn't parallelish to the original lines, they're not
+    # collinearish.
+    if not areParallelish(firstLine, l2, parallelishThreshold) or \
+       not areParallelish(secondLine, l2, parallelishThreshold):
+       return False
+
+    # We're done!
+    return True
 
 def areOverlapping(firstLine, secondLine):
     ''' Checks whether two line segments overlap.
@@ -158,9 +190,54 @@ def areOverlapping(firstLine, secondLine):
     return True
 
 def longestSegment(points):
-    ''' From a set of points, returns the two points that are 
-    farthest apart '''
+    ''' Finds the pair of points farthest apart from each other '''
     lines = [(p1, p2) for p1 in points for p2 in points if p1 != p2]
     sortedLines = sorted(lines, key=lineLength)
     return sortedLines[-1] # last one has largest lineLength
+
+def pointInLineCR(point, line):
+    ''' Indicate whether a point is within a line segment's containment region.
+
+    The Containment Region of some line L is the area between boundary 
+    lines that intersect the endpoints of L and are perpendicular to L.
+    
+                         /               /
+                        /  Containment  /
+                       /      Region   /
+                      /               /
+        endpoint ->  O```.... L      /
+          of L      /        ```....O <- endpoint     
+                   /               /      of L
+                  /  Containment  / 
+                 /      Region   /
+                /               /
+            boundary        boundary
+
+    This function returns True if the point is within this region and
+    False otherwise.
+    '''
+    firstEndpt, secondEndpt = line
+
+    # Some point p falls into a line L's containment region if lines 
+    # between p and L's endpoints do not make obtuse angles with L.
+    
+    # Check against the first endpoint.
+    lineOrient = lineAngle(line)
+    compOrient = lineAngle((point, firstEndpt))
+    angle = angleDiff(lineOrient, compOrient) 
+    if abs(angle) > pi/2: #(CV_PI/2):
+        return False
+
+    # Check against the second endpoint.
+    compOrient = lineAngle((point, secondEndpt))
+    angle = angleDiff(lineOrient, compOrient) 
+    if abs(angle) > pi/2: #(CV_PI/2):
+        return False
+
+    # If we made it this far, we're in!
+    return True
+
+
+def mergeLineSegments(firstLine, secondLine):
+    return longestSegment(firstLine + secondLine)
 

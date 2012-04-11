@@ -17,7 +17,7 @@ def displayImage(name, image):
     ''' Makes a window that displays the given image '''
     width, height = GetSize(image)
     #ratio = float(height)/float(width)
-    scale = 1.0
+    scale = .7
     newHeight = int(height*scale)
     newWidth = int(width*scale)
     scaledImg = CreateMat(newHeight, newWidth, image.type)
@@ -49,6 +49,8 @@ def getHoughLines(img):
         CV_THRESH_BINARY,
         ADAPTIVE_THRESH_BLOCK_SIZE)
 
+    displayImage("thresholded image", img)
+
     width, height = GetSize(img)
     hsvImage = CreateMat(height, width, CV_8UC3)
     CvtColor(origImg, hsvImage, CV_RGB2HSV)
@@ -59,13 +61,114 @@ def getHoughLines(img):
 
     Split(hsvImage, hue, sat, val, None)
 
+    displayImage("value", val)
+
     houghImage = CreateMat(height, width, CV_8UC1)
     storage = CreateMemStorage(0)
     Canny(val, houghImage, 230, 250, 3)
 
-    lines = HoughLines2(houghImage, storage, CV_HOUGH_PROBABILISTIC, 1, CV_PI/180, 50, 10, 20)
+    displayImage("post-Canny", houghImage)
+
+    Dilate(houghImage, houghImage, None, 1)
+    displayImage("post-dilated Canny", houghImage)
+
+    lines = HoughLines2(houghImage,
+            storage,
+            CV_HOUGH_PROBABILISTIC, # method
+            1,                      # rho
+            CV_PI/180,              # theta
+            50,                     # threshold
+            10,                     # param1 (min line length)
+            20)                     # param2 (max gap between lines)
 
     return lines
+
+def areRedundantSegments(firstLine, secondLine):
+    ''' Indicates whether two lines segments should really be one '''
+    parallelishThreshold = 1.0 # TODO: Magic number danger!
+    
+    if not areParallelish(firstLine, secondLine, parallelishThreshold): 
+        return False
+
+    if not areColinearish(firstLine, secondLine):
+        return False
+
+#   NOTE:
+#   =====
+#   I don't think the following code works because it assumes
+#   the longest segment has endpoints from different lines.
+#
+#
+#    # Are the lines colinear-ish?
+#    newEndpoints = longestSegment(firstLine + secondLine)
+#    if not areParallelish(firstLine, newEndpoints, parallelishThreshold):
+#        return False
+#
+#    # If the print statement never ever executes, you could remove
+#    # this if statement for a tiny tiny optimization
+#    if not areParallelish(secondLine, newEndpoints, parallelishThreshold):
+#        print "Turns out parallelish is not a commutative property"
+#        return False
+
+    # Are the segments more or less overlapping?
+    #
+    # Line segments "overlap" if at least one endpoint from the first line
+    # falls into a "Containment Region" of the second line (or vice-versa).
+    #
+    # The Containment Region of some line L is the area between boundary 
+    # lines that intersect the endpoints of L and are perpendicular to L.
+    #
+    #                     /               /
+    #                    /  Containment  /
+    #                   /      Region   /
+    #                  /               /
+    #    endpoint ->  O```.... L      /
+    #      of L      /        ```....O <- endpoint     
+    #               /               /      of L
+    #              /  Containment  / 
+    #             /      Region   /
+    #            /               /
+    #        boundary        boundary
+    #
+    # Example of "overlapping" line segments using the Containment Region:
+    #
+    #                     /   point in    /
+    #                    /    the C.R.   /
+    #                   /       v       /
+    #                  /        O```...x
+    #                 O```....        / ```....
+    #                /        ```....O                 
+    #               /               /
+    #              /               / 
+    #             /               /
+    #            /               /
+    #
+    # Example of non-"overlapping" line segments:
+    #
+    #                     /               /
+    #                    /               /
+    #                   /               /
+    #                  /               /
+    #                 O```....        /    O```....
+    #                /        ```....O     ^       ```  
+    #               /               /   point not
+    #              /               /   in the C.R.
+    #             /               /
+    #            /               /
+    #
+    # Some point p falls into a line L's containment region if lines 
+    # between p and L's endpoints do not make obtuse angles with L.
+
+    f1, f2 = firstLine
+    s1, s2 = secondLine
+
+    if pointInLineCR(s1, firstLine) or \
+       pointInLineCR(s2, firstLine) or  \
+       pointInLineCR(f1, secondLine) or \
+       pointInLineCR(f2, secondLine):
+       return True
+    
+    return False
 
 def randomColor():
     r = random.randint(0, 255)
@@ -73,12 +176,54 @@ def randomColor():
     b = random.randint(0, 255)
     return CV_RGB(r, g, b)
 
+def mergeRedudantLines(lines):
+    ''' Merges redundant line segments and returns a new list of lines.
+
+    Two line segments are redunant if they could just as well be a single
+    line segment.
+
+    The output of this function is the same as the input, except 
+    with redudant lines merged into single lines.
+    '''
+    newLines = []
+    for i in xrange(len(lines)):
+        firstLine = lines[i]
+
+        for j in xrange(i+1, len(lines)):
+            secondLine = lines[j]
+
+            if areRedundantSegments(firstLine, secondLine):
+                firstLine = mergeLineSegments(firstLine, secondLine)
+                print 'Merged lines!'
+
+        newLines.append(firstLine) 
+
+    return newLines
+
 # Match orthogonal lines
 origImg = getImage()
 displayImage('original', origImg)
 width, height = GetSize(origImg)
 houghImageColor = CreateMat(height, width, CV_8UC3)
 lines = getHoughLines(origImg)
+
+def displayLines(lineCollection, title, imgWidth, imgHeight):
+    ''' Displays lines in a window based on given dimensions. '''
+    
+    image = CreateMat(height, width, CV_8UC3)
+    Set(image, 0)
+
+    for line in lineCollection:
+        color = randomColor()
+        Line(image, line[0], line[1], color, 3, 8)
+
+    displayImage(title, image)
+
+displayLines(lines, "Raw Hough Lines", width, height)
+
+lines = mergeRedudantLines(lines)
+displayLines(lines, "Merged Hough Lines", width, height)
+
 matchedLines = []
 for i in xrange(len(lines)):
     line1 = lines[i]
@@ -96,8 +241,8 @@ for i in xrange(len(lines)):
         
         if abs(dotProduct) > 0.1:
             continue
-#        if endpointDistance(line1, line2) > 10:
-#            continue
+        if endpointDistance(line1, line2) > 10:
+            continue
         
 #        print "    Found match: ", line1, line2
         matchedLines += [(line1, line2)]
@@ -105,7 +250,7 @@ for i in xrange(len(lines)):
         color = randomColor()
         Line(houghImageColor, line1[0], line1[1], color, 3, 8)
         Line(houghImageColor, line2[0], line2[1], color, 3, 8)
-        
+displayImage("Hough Image Color", houghImageColor)        
         
 
 def areSameOutline(firstOutline, secondOutline, imageWidth, imageHeight):
@@ -207,6 +352,7 @@ def isCardOutline(quad, segments):
     Assumptions:
        - the vertices in quad and lines in segments have the same ordering
     '''
+    parallelishThreshold = 0.95 # TODO: Magic number danger!
 
     a, b, c, d = quad
     leg1, middle, leg2 = segments
@@ -215,7 +361,8 @@ def isCardOutline(quad, segments):
         return False
     
     # Are lines parallel where they should be?
-    if not(areParallel((a,b), (c,d)) and areParallel((b,c), (d,a))):
+    if not(areParallelish((a,b), (c,d), parallelishThreshold) \
+           and areParallelish((b,c), (d,a), parallelishThreshold)):
         return False
     
     # Do line segments fall in reasonable locations?
@@ -252,12 +399,24 @@ def quadIsCardOutline(q):
     quad, segments = q
     return isCardOutline(quad, segments)
 
+segmentedImg = CloneMat(origImg)
+for (quad, segments) in cardOutlines: #[0:10]:
+    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
+displayImage("raw segmented cards", segmentedImg)
+
 cardOutlines = filter(quadIsCardOutline, cardOutlines)
 
 segmentedImg = CloneMat(origImg)
 for (quad, segments) in cardOutlines: #[0:10]:
     PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
-displayImage("segmented cards?", segmentedImg)
+displayImage("filtered segmented cards", segmentedImg)
+
+###############################################################
+# BREAKING HERE FOR DEBUGGING PURPOSES
+while True:
+    time.sleep(500)
+#
+###############################################################
 
 def colorOfCard(cardImg, threshCardImg):
     redSum = greenSum = blueSum = 0
