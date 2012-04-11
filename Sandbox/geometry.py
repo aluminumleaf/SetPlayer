@@ -134,11 +134,11 @@ def extractVertices(middle, leg1, leg2):
 #    vertices = mergeCommonPoint(vertices, leg2)
     return vertices
 
-def areParallelish(firstLine, secondLine, threshold):
+def areParallelish(firstLine, secondLine, threshold = 0.95):
     ''' Precondition: firstLine and secondLine have nonzero length '''
     firstVec = lineVec(firstLine)
     secondVec = lineVec(secondLine)
-    return abs(dot(firstVec, secondVec)) > 0.95
+    return abs(dot(firstVec, secondVec)) > threshold
 
 def areColinearish(firstLine, secondLine):
     parallelishThreshold = 1.0 # TODO: Magic number danger!
