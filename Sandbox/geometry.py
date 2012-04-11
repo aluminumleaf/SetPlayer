@@ -16,7 +16,13 @@ def distance(p1, p2):
     dy = p1[1] - p2[1]
     return sqrt(dx*dx + dy*dy)
 
+def lineLength(line):
+    ''' Compute the length of a line '''
+    return distance(line[0], line[1])
+
 def endpointDistance(line1, line2):
+    ''' Get the shortest distance from an endpoint of the first line
+    to an endpoint of the second '''
     return min(distance(line1[0], line2[0]),
                distance(line1[0], line2[1]),
                distance(line1[1], line2[0]),
@@ -150,3 +156,11 @@ def areOverlapping(firstLine, secondLine):
         return False
 
     return True
+
+def longestSegment(points):
+    ''' From a set of points, returns the two points that are 
+    farthest apart '''
+    lines = [(p1, p2) for p1 in points for p2 in points if p1 != p2]
+    sortedLines = sorted(lines, key=lineLength)
+    return sortedLines[-1] # last one has largest lineLength
+
