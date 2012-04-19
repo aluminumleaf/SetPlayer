@@ -6,9 +6,18 @@ def lineAngle(line):
     return atan2(y, x)
 
 def angleDiff(a1, a2):
-    a1 = fmod(a1, pi) #CV_PI)
-    a2 = fmod(a2, pi) #CV_PI)
-    return a2 - a1;
+    a1 = fmod(a1, 2*pi) #CV_PI)
+    a2 = fmod(a2, 2*pi) #CV_PI)
+    result = a2 - a1
+
+    # Modify the result to fall between
+    # -pi and pi.
+    if result < -pi:
+        result += 2*pi
+    elif result > pi:
+        result -= 2*pi
+    
+    return result
 
 def distance(p1, p2):
     dx = p1[0] - p2[0]
@@ -34,11 +43,15 @@ def vecLen(vec):
     return distance((0,0),vec)
 
 def dot(v1, v2):
-    ''' Precondition: vectors have nonzero length '''
     x = float(v1[0] * v2[0])
     y = float(v1[1] * v2[1])
+    return x + y
+
+def normalizedDot(v1, v2):
+    ''' Precondition: vectors have nonzero length '''
+    d = dot(v1, v2)
     magnitude = vecLen(v1) * vecLen(v2)
-    return (x + y) / magnitude
+    return d / magnitude
 
 def intersect(firstLine, secondLine):
     ''' finds the intersections of two line segments '''
@@ -138,40 +151,96 @@ def areParallelish(firstLine, secondLine, threshold = 0.95):
     ''' Precondition: firstLine and secondLine have nonzero length '''
     firstVec = lineVec(firstLine)
     secondVec = lineVec(secondLine)
-    return abs(dot(firstVec, secondVec)) > threshold
+    return abs(normalizedDot(firstVec, secondVec)) > threshold
+
+def distanceToLine(point, line):
+    (x1, y1), (x2, y2) = line
+    (x0, y0) = point
+
+    v = (y2 - y1, -(x2 - x1))
+    r = (x1 - x0, y1 - y0)
+
+    if vecLen(r) == 0:
+        return 0
+
+    distance = dot(v, r) / vecLen(v)
+    distance = abs(distance)
+
+    return distance
+
 
 def areColinearish(firstLine, secondLine):
-    parallelishThreshold = 1.0 # TODO: Magic number danger!
+    parallelishThreshold = 0.98 # TODO: Magic number danger!
+    distanceThreshold = 3       # TODO: Magic number danger!
 
     f1, f2 = firstLine
     s1, s2 = secondLine
 
-    # Get a line from a firstLine endpoint to a secondLine endpoint.
-    if distance(f1, s1) > distance(f1, s2):
-        l1 = (f1, s1)
-    else:
-        l1 = (f1, s2)
+    if not areParallelish(firstLine, secondLine, parallelishThreshold):
+        return False
 
-    # If this line isn't parallelish to the original lines, they're not
-    # colinearish.
-    if not areParallelish(firstLine, l1, parallelishThreshold) or \
-       not areParallelish(secondLine, l1, parallelishThreshold):
-       return False
+    # Two parallel lines become more colinear as you reduce the perpendicular
+    # distance between one line and a point on the other.
+    #
+    # We can find the perpendicular distance between a line segment
+    # and a point as follows:
+    #
+    #   Let (x1, y1) and (x2, y2) define the endpoints of our line segment.
+    #       (x0, y0) be the point.
+    #       v = (y2 - y1, -(x2 - x1))    (vector perpendicular to line segment)
+    #       r = (x1 - x0, y1 - y0)       (vector from the point to an endpoint)
+    #
+    #   Then our desired distance is
+    #       d = | normalize(v) dot r |
+    #
+    
+    (x1, y1), (x2, y2) = firstLine
+    (x0, y0), _ = secondLine
 
-    # Get a line from the other firstLine enpdoint to a secondLine endpoint.
-    if distance(f2, s1) > distance(f2, s2):
-        l2 = (f2, s1)
-    else:
-        l2 = (f2, s2)
+    v = (y2 - y1, -(x2 - x1))
+    r = (x1 - x0, y1 - y0)
 
-    # Again, if it isn't parallelish to the original lines, they're not
-    # collinearish.
-    if not areParallelish(firstLine, l2, parallelishThreshold) or \
-       not areParallelish(secondLine, l2, parallelishThreshold):
-       return False
+    if vecLen(r) == 0:
+        _, (x0, y0) = secondLine
+        r = (x1 - x0, y1 - y0)
+        
+        if vecLen(r) == 0:
+            print "what's going on!? o_o" 
+            return False # placeholder
 
-    # We're done!
-    return True
+    distance = dot(v, r) / vecLen(v)
+    distance = abs(distance)
+
+    print v, vecLen(v), r, vecLen(r), distance
+
+    return distance < distanceThreshold
+
+#    # Get a line from a firstLine endpoint to a secondLine endpoint.
+#    if distance(f1, s1) < distance(f1, s2):
+#        l1 = (f1, s1)
+#    else:
+#        l1 = (f1, s2)
+#
+#    # If this line isn't parallelish to the original lines, they're not
+#    # colinearish.
+#    if not areParallelish(firstLine, l1, parallelishThreshold) or \
+#       not areParallelish(secondLine, l1, parallelishThreshold):
+#       return False
+#
+#    # Get a line from the other firstLine enpdoint to a secondLine endpoint.
+#    if distance(f2, s1) < distance(f2, s2):
+#        l2 = (f2, s1)
+#    else:
+#        l2 = (f2, s2)
+#
+#    # Again, if it isn't parallelish to the original lines, they're not
+#    # collinearish.
+#    if not areParallelish(firstLine, l2, parallelishThreshold) or \
+#       not areParallelish(secondLine, l2, parallelishThreshold):
+#       return False
+#
+#    # We're done!
+#    return True
 
 def areOverlapping(firstLine, secondLine):
     ''' Checks whether two line segments overlap.
@@ -218,12 +287,20 @@ def pointInLineCR(point, line):
     '''
     firstEndpt, secondEndpt = line
 
+    # Guard against redundant points.
+    if (point == firstEndpt) or (point == secondEndpt):
+        return True
+
     # Some point p falls into a line L's containment region if lines 
     # between p and L's endpoints do not make obtuse angles with L.
     
+#    # Note that dot products return the cosine between the angles
+#    # times their magnitudes (which are always positive!), so any
+#    # positive dot product indicates an accute angle.
+
     # Check against the first endpoint.
     lineOrient = lineAngle(line)
-    compOrient = lineAngle((point, firstEndpt))
+    compOrient = lineAngle((firstEndpt, point))
     angle = angleDiff(lineOrient, compOrient) 
     if abs(angle) > pi/2: #(CV_PI/2):
         return False

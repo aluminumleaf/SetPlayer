@@ -85,10 +85,10 @@ def getHoughLines(img):
 
 def areRedundantSegments(firstLine, secondLine):
     ''' Indicates whether two lines segments should really be one '''
-    parallelishThreshold = 1.0 # TODO: Magic number danger!
+#    parallelishThreshold = 1.0 # TODO: Magic number danger!
     
-    if not areParallelish(firstLine, secondLine, parallelishThreshold): 
-        return False
+#    if not areParallelish(firstLine, secondLine, parallelishThreshold): 
+#        return False
 
     if not areColinearish(firstLine, secondLine):
         return False
@@ -170,6 +170,8 @@ def areRedundantSegments(firstLine, secondLine):
     
     return False
 
+#    return areOverlapping(firstLine, secondLine)
+
 def randomColor():
     r = random.randint(0, 255)
     g = random.randint(0, 255)
@@ -185,18 +187,30 @@ def mergeRedudantLines(lines):
     The output of this function is the same as the input, except 
     with redudant lines merged into single lines.
     '''
+    lines = list(lines)
     newLines = []
+
+    # Cycle through all the lines.
     for i in xrange(len(lines)):
         firstLine = lines[i]
+        merged = False
 
+        # Compare it with all lines after it.
         for j in xrange(i+1, len(lines)):
             secondLine = lines[j]
 
+            # If the two lines are redundant segments, merge
+            # them into the second line and indicate that.
             if areRedundantSegments(firstLine, secondLine):
-                firstLine = mergeLineSegments(firstLine, secondLine)
-                print 'Merged lines!'
+                lines[j] = mergeLineSegments(firstLine, secondLine)
+                merged = True
+                
+        # If some later line doesn't not account for this first
+        # line, we want to keep it.
+        if not merged:
+            newLines.append(firstLine) 
 
-        newLines.append(firstLine) 
+    print "merged ", len(lines), " lines into just ", len(newLines), ". Aren't I impressive? :>"
 
     return newLines
 
@@ -224,6 +238,7 @@ displayLines(lines, "Raw Hough Lines", width, height)
 lines = mergeRedudantLines(lines)
 displayLines(lines, "Merged Hough Lines", width, height)
 
+# Pair lines that are roughly perpendicular
 matchedLines = []
 for i in xrange(len(lines)):
     line1 = lines[i]
@@ -237,9 +252,9 @@ for i in xrange(len(lines)):
         v1 = lineVec(line1)
         v2 = lineVec(line2)
 
-        dotProduct = dot(v1, v2)
+        dotProduct = normalizedDot(v1, v2)
         
-        if abs(dotProduct) > 0.1:
+        if abs(dotProduct) > 0.2:
             continue
         if endpointDistance(line1, line2) > 10:
             continue
@@ -315,6 +330,7 @@ def areSameOutline(firstOutline, secondOutline, imageWidth, imageHeight):
     return actualTotalArea < PERMISSIBLE_OVERLAP_FACTOR * expectedTotalArea
 
 
+# Pair matches that share line segments
 cardOutlines = []
 for i in xrange(len(matchedLines)):
     line1, line2 = matchedLines[i]
