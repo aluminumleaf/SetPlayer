@@ -211,8 +211,6 @@ def areColinearish(firstLine, secondLine):
     distance = dot(v, r) / vecLen(v)
     distance = abs(distance)
 
-    print v, vecLen(v), r, vecLen(r), distance
-
     return distance < distanceThreshold
 
 #    # Get a line from a firstLine endpoint to a secondLine endpoint.

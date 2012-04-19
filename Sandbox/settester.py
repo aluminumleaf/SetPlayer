@@ -362,6 +362,41 @@ for i in xrange(len(matchedLines)):
 def roughlyEqual(v1, v2, threshold):
     return abs(v1 - v2) < threshold
 
+def getCardImage(outline):
+    global origImg
+
+    cardImgWidth =  100 # TODO: noooooo magic number
+    cardImgHeight = 150
+
+    cardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC3)
+    transform = CreateMat(3, 3, CV_32FC1)
+
+    quad = orientCard(outline)
+    GetPerspectiveTransform(quad,
+                            [(0,0),
+                             (cardImgWidth, 0),
+                             (cardImgWidth, cardImgHeight),
+                             (0, cardImgHeight)],
+                            transform)
+    WarpPerspective(origImg, cardImg, transform)
+    grayCardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC1)
+    CvtColor(cardImg, grayCardImg, CV_RGB2GRAY)
+
+    AdaptiveThreshold(
+        grayCardImg, grayCardImg,
+        WHITE,
+        CV_ADAPTIVE_THRESH_MEAN_C,
+        CV_THRESH_BINARY_INV,
+        ADAPTIVE_THRESH_BLOCK_SIZE)
+    return (cardImg, grayCardImg)
+
+rejectionCount = 0
+def rejectCard(quad, reason):
+    global rejectionCount
+    rejectionCount += 1
+    img, _ = getCardImage(quad)
+    displayImage("Rejection " + str(rejectionCount) + ":" + reason, img)
+
 def isCardOutline(quad, segments):
     ''' Check whether the given quad likely outlines a card.
 
@@ -374,15 +409,18 @@ def isCardOutline(quad, segments):
     leg1, middle, leg2 = segments
 
     if a == b or b == c or c ==d or d == a:
+        rejectCard(quad, "duplicate points")
         return False
     
     # Are lines parallel where they should be?
     if not(areParallelish((a,b), (c,d), parallelishThreshold) \
            and areParallelish((b,c), (d,a), parallelishThreshold)):
+        rejectCard(quad, "lines not parallelish")
         return False
     
     # Do line segments fall in reasonable locations?
     if not(areOverlapping(leg1,   (a,b)) and areOverlapping(middle, (b,c)) and areOverlapping(leg2,   (c,d))):
+        rejectCard(quad, "line segments weird")
         return False
 
     # Does the aspect ratio make sense?
@@ -398,9 +436,11 @@ def isCardOutline(quad, segments):
         ratio1 = 1/ratio1
         ratio2 = 1/ratio2
 
-    if not(roughlyEqual(ratio1, ratio2, 0.1)):
+    if not(roughlyEqual(ratio1, ratio2, 0.4)): # TODO: magic!
+        rejectCard(quad, "ratios not equal:" + str(ratio1) + "," + str(ratio2))
         return False
-    if ratio1 > 2 or ratio2 > 2:
+    if ratio1 > 2 or ratio2 > 2: # TODO: magic!
+        rejectCard(quad, "ratios too extreme")
         return False
 
     return True
@@ -497,9 +537,6 @@ def bestMatch(templates, card):
     '''returns the template that best matches the card'''
     return sorted(templates, key=lambda c: compareImages(c[3],card))[0]
 
-cardImgWidth = 100
-cardImgHeight = 150
-
 def cardShadeLevelIndex(cardImage, shapeCount):
     ''' Determines how shaded a card is (open, striped, or filled) 
     
@@ -515,32 +552,6 @@ Set(maskImg, 255)
 border = 15
 Rectangle(maskImg, (border, border), (width-border, height-border), 0, CV_FILLED)
 displayImage("mask", maskImg)
-
-def getCardImage(outline):
-    global origImg, cardImgHeight, cardImgWidth
-
-    cardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC3)
-    transform = CreateMat(3, 3, CV_32FC1)
-
-    quad = orientCard(outline)
-    GetPerspectiveTransform(quad,
-                            [(0,0),
-                             (cardImgWidth, 0),
-                             (cardImgWidth, cardImgHeight),
-                             (0, cardImgHeight)],
-                            transform)
-    WarpPerspective(origImg, cardImg, transform)
-    grayCardImg = CreateMat(cardImgHeight, cardImgWidth, CV_8UC1)
-    CvtColor(cardImg, grayCardImg, CV_RGB2GRAY)
-
-    AdaptiveThreshold(
-        grayCardImg, grayCardImg,
-        WHITE,
-        CV_ADAPTIVE_THRESH_MEAN_C,
-        CV_THRESH_BINARY_INV,
-        ADAPTIVE_THRESH_BLOCK_SIZE)
-    return (cardImg, grayCardImg)
-
 
 def removeDuplicateCards(outlines, imageWidth, imageHeight):
     ''' Spits out a cleaned up list of outlines without rough duplicates '''
