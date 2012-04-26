@@ -12,9 +12,21 @@ from geometry import *
 DEFAULT_FILE = "../Pictures/black_bg.png"
 WHITE = 255
 ADAPTIVE_THRESH_BLOCK_SIZE = 51
+  
+colors   = ["red", "green", "purple"]
+shapes   = ["diamonds", "ovals", "squiggles"]
+textures = ["open", "filled", "striped"]
+counts   = ["one", "two", "three"]
 
+windowNames = []
 def displayImage(name, image):
     ''' Makes a window that displays the given image '''
+  
+    if name != "filtered segmented cards":
+        return
+
+    global windowNames;
+  
     width, height = GetSize(image)
     #ratio = float(height)/float(width)
     scale = .7
@@ -22,7 +34,10 @@ def displayImage(name, image):
     newWidth = int(width*scale)
     scaledImg = CreateMat(newHeight, newWidth, image.type)
     Resize(image, scaledImg)
-    NamedWindow(name)
+  
+    if not name in windowNames:
+        NamedWindow(name)
+        windowNames.append(name)
     ShowImage(name, scaledImg)
 
 def getImage():
@@ -40,6 +55,7 @@ def grayscale(img):
     return result
 
 def getHoughLines(img):
+    origImg = img
     img = grayscale(img)
 
     AdaptiveThreshold(
@@ -214,17 +230,10 @@ def mergeRedudantLines(lines):
 
     return newLines
 
-# Match orthogonal lines
-origImg = getImage()
-displayImage('original', origImg)
-width, height = GetSize(origImg)
-houghImageColor = CreateMat(height, width, CV_8UC3)
-lines = getHoughLines(origImg)
-
 def displayLines(lineCollection, title, imgWidth, imgHeight):
     ''' Displays lines in a window based on given dimensions. '''
     
-    image = CreateMat(height, width, CV_8UC3)
+    image = CreateMat(imgHeight, imgWidth, CV_8UC3)
     Set(image, 0)
 
     for line in lineCollection:
@@ -232,40 +241,6 @@ def displayLines(lineCollection, title, imgWidth, imgHeight):
         Line(image, line[0], line[1], color, 3, 8)
 
     displayImage(title, image)
-
-displayLines(lines, "Raw Hough Lines", width, height)
-
-lines = mergeRedudantLines(lines)
-displayLines(lines, "Merged Hough Lines", width, height)
-
-# Pair lines that are roughly perpendicular
-matchedLines = []
-for i in xrange(len(lines)):
-    line1 = lines[i]
-
-    for j in xrange(i+1, len(lines)):
-        line2 = lines[j]
-    
-        if line1 == line2:
-            continue
-
-        v1 = lineVec(line1)
-        v2 = lineVec(line2)
-
-        dotProduct = normalizedDot(v1, v2)
-        
-        if abs(dotProduct) > 0.2:
-            continue
-        if endpointDistance(line1, line2) > 10:
-            continue
-        
-#        print "    Found match: ", line1, line2
-        matchedLines += [(line1, line2)]
-        
-        color = randomColor()
-        Line(houghImageColor, line1[0], line1[1], color, 3, 8)
-        Line(houghImageColor, line2[0], line2[1], color, 3, 8)
-displayImage("Hough Image Color", houghImageColor)        
         
 
 def areSameOutline(firstOutline, secondOutline, imageWidth, imageHeight):
@@ -329,41 +304,10 @@ def areSameOutline(firstOutline, secondOutline, imageWidth, imageHeight):
     # Decide whether or not they are the same
     return actualTotalArea < PERMISSIBLE_OVERLAP_FACTOR * expectedTotalArea
 
-
-# Pair matches that share line segments
-cardOutlines = []
-for i in xrange(len(matchedLines)):
-    line1, line2 = matchedLines[i]
-    for j in xrange(i+1, len(matchedLines)):
-        
-        other1, other2 = matchedLines[j]
-
-        if (line1 == other1) and (line2 != other2):
-            quad = extractVertices(line1, line2, other2)
-            segments = (line2, line1, other2)
-
-        elif (line2 == other1) and (line1 != other2):
-            quad = extractVertices(line2, line1, other2)
-            segments = (line1, line2, other2)
-
-        elif (line1 == other2) and (line2 != other1):
-            quad = extractVertices(line1, line2, other1)
-            segments = (line2, line1, other1)
-
-        elif (line2 == other2) and (line1 != other1):
-            quad = extractVertices(line2, line1, other1)
-            segments = (line1, line2, other1)
-
-        else:
-            continue
-
-        cardOutlines += [(quad, segments)]
-
 def roughlyEqual(v1, v2, threshold):
     return abs(v1 - v2) < threshold
 
-def getCardImage(outline):
-    global origImg
+def getCardImage(origImg, outline):
 
     cardImgWidth =  100 # TODO: noooooo magic number
     cardImgHeight = 150
@@ -394,8 +338,8 @@ rejectionCount = 0
 def rejectCard(quad, reason):
     global rejectionCount
     rejectionCount += 1
-    img, _ = getCardImage(quad)
-    displayImage("Rejection " + str(rejectionCount) + ":" + reason, img)
+#    img, _ = getCardImage(quad)
+#    displayImage("Rejection " + str(rejectionCount) + ":" + reason, img)
 
 def isCardOutline(quad, segments):
     ''' Check whether the given quad likely outlines a card.
@@ -455,25 +399,6 @@ def quadIsCardOutline(q):
     quad, segments = q
     return isCardOutline(quad, segments)
 
-segmentedImg = CloneMat(origImg)
-for (quad, segments) in cardOutlines: #[0:10]:
-    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
-displayImage("raw segmented cards", segmentedImg)
-
-cardOutlines = filter(quadIsCardOutline, cardOutlines)
-
-segmentedImg = CloneMat(origImg)
-for (quad, segments) in cardOutlines: #[0:10]:
-    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
-displayImage("filtered segmented cards", segmentedImg)
-
-###############################################################
-# BREAKING HERE FOR DEBUGGING PURPOSES
-while True:
-    time.sleep(500)
-#
-###############################################################
-
 def colorOfCard(cardImg, threshCardImg):
     redSum = greenSum = blueSum = 0
     width, height = GetSize(cardImg)
@@ -487,11 +412,6 @@ def colorOfCard(cardImg, threshCardImg):
     if redSum > greenSum and blueSum > redSum * 0.75:
         return "purple"
     return "red"
-
-colors   = ["red", "green", "purple"]
-shapes   = ["diamonds", "ovals", "squiggles"]
-textures = ["open", "filled", "striped"]
-counts   = ["one", "two", "three"]
 
 def templateImageFilename(count, texture, shape):
     return ("../Pictures/Training/" + 
@@ -511,22 +431,6 @@ def templateImage(count, texture, shape):
 def wordToInt(word):
     return counts.index(word) + 1
 
-templates = [(wordToInt(count), texture, shape, templateImage(count, texture, shape)) 
-             for count in counts
-             for texture in textures 
-             for shape in shapes]
-templates = filter(lambda x: x[3] != (), templates)
-
-newTemplates = []
-for t in templates:
-    if t[2] == "squiggles":
-        img = t[3]
-        width, height = GetSize(img)
-        newImg = CreateMat(height, width, CV_8UC1)
-        Flip(img, newImg, 1) # horizontal flip
-        newTemplates += [(t[0], t[1], t[2], newImg)]
-templates += newTemplates
-
 def compareImages(img1, img2):
     width, height = GetSize(img1)
     diff = CreateMat(height, width, CV_8UC1)
@@ -534,7 +438,7 @@ def compareImages(img1, img2):
     return Sum(diff)
 
 def bestMatch(templates, card):
-    '''returns the template that best matches the card'''
+    '''returns the template that est matches the card'''
     return sorted(templates, key=lambda c: compareImages(c[3],card))[0]
 
 def cardShadeLevelIndex(cardImage, shapeCount):
@@ -545,13 +449,6 @@ def cardShadeLevelIndex(cardImage, shapeCount):
      - shapeCount is not 0
     '''
     return Sum(cardImage)[0] / (shapeCount * 255)
-
-width, height = GetSize(templates[0][3])
-maskImg = CreateMat(height, width, CV_8UC1)
-Set(maskImg, 255)
-border = 15
-Rectangle(maskImg, (border, border), (width-border, height-border), 0, CV_FILLED)
-displayImage("mask", maskImg)
 
 def removeDuplicateCards(outlines, imageWidth, imageHeight):
     ''' Spits out a cleaned up list of outlines without rough duplicates '''
@@ -571,50 +468,180 @@ def removeDuplicateCards(outlines, imageWidth, imageHeight):
 
     return prunedOutlines
 
-# Might use later in refactoring...
-# ------------------------------------
-#BORDER_MASK = maskImg
-#def hasCardlikeBorder(candidateImg):
-#    ''' Determines whether a given "card"s border is all white '''
-#    PERMISSIBLE_BORDER_NOISE = 1000
-#    maskedImg = applyMask(candidateImg, BORDER_MASK)
-#    borderNoise = Sum(maskedImg)[0] / 255
-#    return borderNoise <= PERMISSIBLE_BORDER_NOISE
-
-imgWidth, imgHeight = GetSize(origImg)
-justOutlines = map(lambda x: x[0], cardOutlines)
-justOutlines = removeDuplicateCards(justOutlines, imgWidth, imgHeight)
-
-cardImages = map(getCardImage, justOutlines)
-
 def applyMask(img, mask):
     w, h = GetSize(img)
     dst = CreateMat(h, w, CV_8UC1)
     And(img, mask, dst)
     return dst
 
-for i in xrange(len(cardImages)):
+templates = [(wordToInt(count), texture, shape, templateImage(count, texture, shape)) 
+             for count in counts
+             for texture in textures 
+             for shape in shapes]
+templates = filter(lambda x: x[3] != (), templates)
 
-    cardImg, grayCardImg = cardImages[i]
+newTemplates = []
+for t in templates:
+  if t[2] == "squiggles":
+    img = t[3]
+    width, height = GetSize(img)
+    newImg = CreateMat(height, width, CV_8UC1)
+    Flip(img, newImg, 1) # horizontal flip
+    newTemplates += [(t[0], t[1], t[2], newImg)]
+templates += newTemplates
 
-    maskedImg = applyMask(grayCardImg, maskImg)
+def playSet(origImg):
+  
+  global templates
 
-    maskSum = Sum(maskedImg)[0] / 255
+  # Match orthogonal lines
+  displayImage('original', origImg)
+  width, height = GetSize(origImg)
+  houghImageColor = CreateMat(height, width, CV_8UC3)
+  lines = getHoughLines(origImg)
 
-    PERMISSIBLE_BORDER_NOISE = 1000
-    if maskSum >= PERMISSIBLE_BORDER_NOISE:
-        continue
+  displayLines(lines, "Raw Hough Lines", width, height)
 
-    windowName = 'card ' +  str(i)
-    displayImage(windowName, grayCardImg)
+  lines = mergeRedudantLines(lines)
+  displayLines(lines, "Merged Hough Lines", width, height)
 
-#    SaveImage("../Pictures/Training/" + pictureName + str(i) + ".png", grayCardImg)
-
-    color = colorOfCard(cardImg, grayCardImg)
-    count, texture, shape, _ = bestMatch(templates, grayCardImg)
-    print i, " is ", count, color, texture, shape, " with total # pixels/shape = ", cardShadeLevelIndex(grayCardImg, count)
+  # Pair lines that are roughly perpendicular
+  matchedLines = []
+  for i in xrange(len(lines)):
+    line1 = lines[i]
     
+    for j in xrange(i+1, len(lines)):
+      line2 = lines[j]
+      
+      if line1 == line2:
+        continue
+      
+      v1 = lineVec(line1)
+      v2 = lineVec(line2)
+      
+      dotProduct = normalizedDot(v1, v2)
+      
+      if abs(dotProduct) > 0.2:
+        continue
+      if endpointDistance(line1, line2) > 10:
+        continue
+      
+      #        print "    Found match: ", line1, line2
+      matchedLines += [(line1, line2)]
+      
+      color = randomColor()
+      Line(houghImageColor, line1[0], line1[1], color, 3, 8)
+      Line(houghImageColor, line2[0], line2[1], color, 3, 8)
+  displayImage("Hough Image Color", houghImageColor)
+
+
+  # Pair matches that share line segments
+  cardOutlines = []
+  for i in xrange(len(matchedLines)):
+    line1, line2 = matchedLines[i]
+    for j in xrange(i+1, len(matchedLines)):
+      
+      other1, other2 = matchedLines[j]
+      
+      if (line1 == other1) and (line2 != other2):
+        quad = extractVertices(line1, line2, other2)
+        segments = (line2, line1, other2)
+      
+      elif (line2 == other1) and (line1 != other2):
+        quad = extractVertices(line2, line1, other2)
+        segments = (line1, line2, other2)
+      
+      elif (line1 == other2) and (line2 != other1):
+        quad = extractVertices(line1, line2, other1)
+        segments = (line2, line1, other1)
+      
+      elif (line2 == other2) and (line1 != other1):
+        quad = extractVertices(line2, line1, other1)
+        segments = (line1, line2, other1)
+      
+      else:
+        continue
+      
+      cardOutlines += [(quad, segments)]
+
+  segmentedImg = CloneMat(origImg)
+  for (quad, segments) in cardOutlines: #[0:10]:
+    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
+  displayImage("raw segmented cards", segmentedImg)
+
+  cardOutlines = filter(quadIsCardOutline, cardOutlines)
+
+  segmentedImg = CloneMat(origImg)
+  for (quad, segments) in cardOutlines: #[0:10]:
+    PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
+  displayImage("filtered segmented cards", segmentedImg)
+
+  ###############################################################
+  # BREAKING HERE FOR DEBUGGING PURPOSES
+  #while True:
+  #    time.sleep(500)
+  #
+  ###############################################################
+
+  width, height = GetSize(templates[0][3])
+  maskImg = CreateMat(height, width, CV_8UC1)
+  Set(maskImg, 255)
+  border = 15
+  Rectangle(maskImg, (border, border), (width-border, height-border), 0, CV_FILLED)
+  displayImage("mask", maskImg)
+
+
+  # Might use later in refactoring...
+  # ------------------------------------
+  #BORDER_MASK = maskImg
+  #def hasCardlikeBorder(candidateImg):
+  #    ''' Determines whether a given "card"s border is all white '''
+  #    PERMISSIBLE_BORDER_NOISE = 1000
+  #    maskedImg = applyMask(candidateImg, BORDER_MASK)
+  #    borderNoise = Sum(maskedImg)[0] / 255
+  #    return borderNoise <= PERMISSIBLE_BORDER_NOISE
+
+  imgWidth, imgHeight = GetSize(origImg)
+  justOutlines = map(lambda x: x[0], cardOutlines)
+  justOutlines = removeDuplicateCards(justOutlines, imgWidth, imgHeight)
+
+  cardImages = map(lambda outline: getCardImage(origImg, outline), justOutlines)
+
+  for i in xrange(len(cardImages)):
+
+      cardImg, grayCardImg = cardImages[i]
+
+      maskedImg = applyMask(grayCardImg, maskImg)
+
+      maskSum = Sum(maskedImg)[0] / 255
+
+      PERMISSIBLE_BORDER_NOISE = 1000
+      if maskSum >= PERMISSIBLE_BORDER_NOISE:
+          continue
+
+      windowName = 'card ' +  str(i)
+      displayImage(windowName, grayCardImg)
+
+  #    SaveImage("../Pictures/Training/" + pictureName + str(i) + ".png", grayCardImg)
+
+      color = colorOfCard(cardImg, grayCardImg)
+      count, texture, shape, _ = bestMatch(templates, grayCardImg)
+      print i, " is ", count, color, texture, shape, " with total # pixels/shape = ", cardShadeLevelIndex(grayCardImg, count)
+
+#origImg = getImage()
+
+camera_index = 1
+capture = CaptureFromCAM(camera_index)
+def repeat():
+  global capture
+  size = 640
+  frame = QueryFrame(capture)
+  ratio = float(frame.height) / frame.width
+  f2 = CreateMat(int(size * ratio), size, CV_8UC3)
+  Resize(frame, f2)
+  playSet(f2)
+  WaitKey(2)
 
 while True:
-    time.sleep(500)
+    repeat()
 
