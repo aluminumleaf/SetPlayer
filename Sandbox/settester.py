@@ -615,7 +615,7 @@ def playSet(origImg):
 
       maskSum = Sum(maskedImg)[0] / 255
 
-      PERMISSIBLE_BORDER_NOISE = 1000
+      PERMISSIBLE_BORDER_NOISE = 700
       if maskSum >= PERMISSIBLE_BORDER_NOISE:
           continue
 
@@ -626,7 +626,14 @@ def playSet(origImg):
 
       color = colorOfCard(cardImg, grayCardImg)
       count, texture, shape, _ = bestMatch(templates, grayCardImg)
-      print i, " is ", count, color, texture, shape, " with total # pixels/shape = ", cardShadeLevelIndex(grayCardImg, count)
+      pixelsPerShape = cardShadeLevelIndex(grayCardImg, count)
+  
+      STRIPED_MIN_PIXELS = 800
+      STRIPED_MAX_PIXELS = 1500
+      if STRIPED_MIN_PIXELS < pixelsPerShape and pixelsPerShape < STRIPED_MAX_PIXELS:
+          texture = "striped"
+  
+      print i, " is ", count, color, texture, shape, " with total # pixels/shape = ", pixelsPerShape
 
 #origImg = getImage()
 
