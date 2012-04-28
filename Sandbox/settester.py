@@ -637,6 +637,24 @@ def playSet(origImg):
 
 #origImg = getImage()
 
+def isSet(card1, card2, card3):
+    ''' Determine whether the given three cards make a Set set.
+
+    Assumes each given card is a tuple of the same length.
+    '''
+    for i in range(len(card1)):
+        if not (allDifferent(card1[i], card2[i], card3[i]) or 
+                allSame(card1[i], card2[i], card3[i])):
+            return False
+    return True
+    
+def allDifferent(first, second, third):
+    return (first != second) and (second != third) and (first != third)
+
+def allSame(first, second, third):
+    return (first == second) and (second == third)
+
+
 camera_index = 1
 capture = CaptureFromCAM(camera_index)
 def repeat():
