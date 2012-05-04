@@ -8,10 +8,9 @@ import os
 
 # our imports
 from geometry import *
+from imgutil import *
 
 DEFAULT_FILE = "../Pictures/black_bg.png"
-WHITE = 255
-ADAPTIVE_THRESH_BLOCK_SIZE = 51
   
 colors   = ["red", "green", "purple"]
 shapes   = ["diamonds", "ovals", "squiggles"]
@@ -22,7 +21,7 @@ windowNames = []
 def displayImage(name, image):
     ''' Makes a window that displays the given image '''
   
-    if name != "filtered segmented cards":
+    if name != "filtered segmented cards" and name != "sets":
         return
 
     global windowNames;
@@ -45,59 +44,6 @@ def getImage():
     if filename == "":
         filename = DEFAULT_FILE
     return LoadImageM(filename)
-
-def grayscale(img):
-    if (img.type == CV_8UC1):
-        return img
-    width, height = GetSize(img)
-    result = CreateMat(height, width, CV_8UC1)
-    CvtColor(img, result, CV_RGB2GRAY)
-    return result
-
-def getHoughLines(img):
-    origImg = img
-    img = grayscale(img)
-
-    AdaptiveThreshold(
-        img, img, 
-        WHITE,
-        CV_ADAPTIVE_THRESH_MEAN_C,
-        CV_THRESH_BINARY,
-        ADAPTIVE_THRESH_BLOCK_SIZE)
-
-    displayImage("thresholded image", img)
-
-    width, height = GetSize(img)
-    hsvImage = CreateMat(height, width, CV_8UC3)
-    CvtColor(origImg, hsvImage, CV_RGB2HSV)
-
-    hue = CreateMat(height, width, CV_8UC1)
-    sat = CreateMat(height, width, CV_8UC1)
-    val = CreateMat(height, width, CV_8UC1)
-
-    Split(hsvImage, hue, sat, val, None)
-
-    displayImage("value", val)
-
-    houghImage = CreateMat(height, width, CV_8UC1)
-    storage = CreateMemStorage(0)
-    Canny(val, houghImage, 230, 250, 3)
-
-    displayImage("post-Canny", houghImage)
-
-    Dilate(houghImage, houghImage, None, 1)
-    displayImage("post-dilated Canny", houghImage)
-
-    lines = HoughLines2(houghImage,
-            storage,
-            CV_HOUGH_PROBABILISTIC, # method
-            1,                      # rho
-            CV_PI/180,              # theta
-            50,                     # threshold
-            10,                     # param1 (min line length)
-            20)                     # param2 (max gap between lines)
-
-    return lines
 
 def areRedundantSegments(firstLine, secondLine):
     ''' Indicates whether two lines segments should really be one '''
@@ -226,7 +172,7 @@ def mergeRedudantLines(lines):
         if not merged:
             newLines.append(firstLine) 
 
-    print "merged ", len(lines), " lines into just ", len(newLines), ". Aren't I impressive? :>"
+    #print "merged ", len(lines), " lines into just ", len(newLines), ". Aren't I impressive? :>"
 
     return newLines
 
@@ -431,12 +377,6 @@ def templateImage(count, texture, shape):
 def wordToInt(word):
     return counts.index(word) + 1
 
-def compareImages(img1, img2):
-    width, height = GetSize(img1)
-    diff = CreateMat(height, width, CV_8UC1)
-    AbsDiff(img1, img2, diff)
-    return Sum(diff)
-
 def bestMatch(templates, card):
     '''returns the template that est matches the card'''
     return sorted(templates, key=lambda c: compareImages(c[3],card))[0]
@@ -449,6 +389,10 @@ def cardShadeLevelIndex(cardImage, shapeCount):
      - shapeCount is not 0
     '''
     return Sum(cardImage)[0] / (shapeCount * 255)
+    
+def cardSaturationLevel(cardImage, shapeCount):
+    hue, sat, val = hsv(cardImage)
+    return Sum(sat)[0] / (shapeCount * 255)
 
 def removeDuplicateCards(outlines, imageWidth, imageHeight):
     ''' Spits out a cleaned up list of outlines without rough duplicates '''
@@ -468,12 +412,6 @@ def removeDuplicateCards(outlines, imageWidth, imageHeight):
 
     return prunedOutlines
 
-def applyMask(img, mask):
-    w, h = GetSize(img)
-    dst = CreateMat(h, w, CV_8UC1)
-    And(img, mask, dst)
-    return dst
-
 templates = [(wordToInt(count), texture, shape, templateImage(count, texture, shape)) 
              for count in counts
              for texture in textures 
@@ -489,6 +427,21 @@ for t in templates:
     Flip(img, newImg, 1) # horizontal flip
     newTemplates += [(t[0], t[1], t[2], newImg)]
 templates += newTemplates
+
+def getTemplate(count, texture, shape):
+    global templates
+    for t in templates:
+        if (t[0], t[1], t[2]) == (count, texture, shape):
+            return t[3]
+    return None
+    
+shadeLevels = {}
+for s in shapes:
+    shadeLevels[s] = (cardShadeLevelIndex(getTemplate(1, "open", s),1),
+                      cardShadeLevelIndex(getTemplate(1, "filled", s),1))
+
+for s in shadeLevels:
+    print s,shadeLevels[s]
 
 def playSet(origImg):
   
@@ -607,6 +560,9 @@ def playSet(origImg):
 
   cardImages = map(lambda outline: getCardImage(origImg, outline), justOutlines)
 
+  cardOutlineLookup = {}
+
+  cards = []
   for i in xrange(len(cardImages)):
 
       cardImg, grayCardImg = cardImages[i]
@@ -615,27 +571,69 @@ def playSet(origImg):
 
       maskSum = Sum(maskedImg)[0] / 255
 
-      PERMISSIBLE_BORDER_NOISE = 700
+      PERMISSIBLE_BORDER_NOISE = 500
       if maskSum >= PERMISSIBLE_BORDER_NOISE:
           continue
-
-      windowName = 'card ' +  str(i)
-      displayImage(windowName, grayCardImg)
 
   #    SaveImage("../Pictures/Training/" + pictureName + str(i) + ".png", grayCardImg)
 
       color = colorOfCard(cardImg, grayCardImg)
-      count, texture, shape, _ = bestMatch(templates, grayCardImg)
+      count, texture, shape, template = bestMatch(templates, grayCardImg)
+      
+      '''
+      #normalizedCardImg = equalizeHist(invert(grayscale(cardImg)))
+      hue, sat, val = hsv(cardImg)
+      normalizedCardImg = equalizeHist(sat)
+      ditheredCardImg = dither(applyMask(normalizedCardImg, template))
+      #ditheredCardImg = dither(normalizedCardImg)
+      '''
+      
+      windowName = 'card ' +  str(i)
+      displayImage(windowName, grayCardImg)
+      
+      #pixelsPerShape = cardShadeLevelIndex(ditheredCardImg, count)
       pixelsPerShape = cardShadeLevelIndex(grayCardImg, count)
+      
+      minShadeLevel = shadeLevels[shape][0]
+      maxShadeLevel = shadeLevels[shape][1]
+      shadeLevelRange = maxShadeLevel - minShadeLevel
+      
+      pixelsPerShape = (pixelsPerShape - minShadeLevel) / shadeLevelRange
+      
+      saturationLevel = cardSaturationLevel(cardImg, count)
   
-      STRIPED_MIN_PIXELS = 800
-      STRIPED_MAX_PIXELS = 1500
+      STRIPED_MIN_PIXELS = .3
+      STRIPED_MAX_PIXELS = .75
       if STRIPED_MIN_PIXELS < pixelsPerShape and pixelsPerShape < STRIPED_MAX_PIXELS:
           texture = "striped"
   
-      print i, " is ", count, color, texture, shape, " with total # pixels/shape = ", pixelsPerShape
+      #print i, " is ", count, color, texture, shape
+      #print "    --> pixels/shape = ", pixelsPerShape
+      #print "    --> saturation level = ", saturationLevel
+      card = (count, color, texture, shape)
+      cards.append(card)
+      cardOutlineLookup[card] = justOutlines[i]
+  
+  sets = findSets(cards)
 
-#origImg = getImage()
+  print "Found", len(sets), "sets!"
+  
+  finalImg = CloneMat(origImg)
+  for set in sets:
+    color = randomColor()
+    for card in set:
+      PolyLine(finalImg, [tuple(cardOutlineLookup[card])], True, color, 10)
+    print set
+  displayImage("sets", finalImg)
+
+def findSets(cards):
+    sets = []
+    for i in xrange(len(cards)):
+        for j in xrange(i + 1, len(cards)):
+            for k in xrange(j + 1, len(cards)):
+                if isSet(cards[i], cards[j], cards[k]):
+                    sets.append((cards[i], cards[j], cards[k]))
+    return sets
 
 def isSet(card1, card2, card3):
     ''' Determine whether the given three cards make a Set set.
@@ -667,6 +665,10 @@ def repeat():
   playSet(f2)
   WaitKey(2)
 
+
+#origImg = getImage()
+
 while True:
+#    time.sleep(1)
     repeat()
 
