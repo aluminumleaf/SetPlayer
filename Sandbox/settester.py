@@ -21,8 +21,8 @@ windowNames = []
 def displayImage(name, image):
     ''' Makes a window that displays the given image '''
   
-    if name != "filtered segmented cards" and name != "sets":
-        return
+#    if name != "filtered segmented cards" and name != "sets":
+#        return
 
     global windowNames;
   
@@ -366,7 +366,7 @@ def templateImageFilename(count, texture, shape):
 def templateImage(count, texture, shape):
     file = templateImageFilename(count, texture, shape)
     if not os.path.exists(file):
-        print "Warning: file not found (",file,")"
+#        print "Warning: file not found (",file,")"
         return ()
     img = LoadImageM(file)
     width, height = GetSize(img)
@@ -440,8 +440,8 @@ for s in shapes:
     shadeLevels[s] = (cardShadeLevelIndex(getTemplate(1, "open", s),1),
                       cardShadeLevelIndex(getTemplate(1, "filled", s),1))
 
-for s in shadeLevels:
-    print s,shadeLevels[s]
+#for s in shadeLevels:
+#    print s,shadeLevels[s]
 
 def playSet(origImg):
   
@@ -528,13 +528,6 @@ def playSet(origImg):
   for (quad, segments) in cardOutlines: #[0:10]:
     PolyLine(segmentedImg, [tuple(quad)], True, randomColor(), 2)
   displayImage("filtered segmented cards", segmentedImg)
-
-  ###############################################################
-  # BREAKING HERE FOR DEBUGGING PURPOSES
-  #while True:
-  #    time.sleep(500)
-  #
-  ###############################################################
 
   width, height = GetSize(templates[0][3])
   maskImg = CreateMat(height, width, CV_8UC1)
@@ -653,22 +646,30 @@ def allSame(first, second, third):
     return (first == second) and (second == third)
 
 
-camera_index = 1
+camera_index = 0
 capture = CaptureFromCAM(camera_index)
 def repeat():
   global capture
   size = 640
   frame = QueryFrame(capture)
+  if frame == None:
+      print "no frame!"
+      return
   ratio = float(frame.height) / frame.width
   f2 = CreateMat(int(size * ratio), size, CV_8UC3)
   Resize(frame, f2)
+#  displayImage("dithered", dither(grayscale(f2)))
   playSet(f2)
   WaitKey(2)
 
 
-#origImg = getImage()
-
-while True:
-#    time.sleep(1)
-    repeat()
-
+option = raw_input('Do you have a webcam hooked up?\n')
+if option[0] == 'y' or option[0] == 'Y':
+    while True:
+        repeat()
+else:
+    origImg = getImage()
+    playSet(origImg)
+    while True:
+        time.sleep(900)
+        
